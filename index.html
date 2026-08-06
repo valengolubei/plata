@@ -1100,9 +1100,12 @@ async function syncNow(manual){
   try{
     const push={};
     for(const[coll,id]of S._dirty){const o=(S[coll]||[]).find(x=>x.id===id);if(o)(push[coll]=push[coll]||[]).push(o)}
-    const res=await fetch(S.config.sync_url,{method:'POST',headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({token:S.config.sync_token,op:'sync',since:S.config.last_sync||0,push})});
-    const data=await res.json();
+    let res;
+    try{res=await fetch(S.config.sync_url,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({token:S.config.sync_token,op:'sync',since:S.config.last_sync||0,push})})}
+    catch(e){throw new Error('network')}
+    const raw=await res.text();
+    let data;try{data=JSON.parse(raw)}catch(e){throw new Error('not_json')}
     if(data.error)throw new Error(data.error);
     let pulled=0;
     for(const coll of['cuentas','categorias','movs','fijos','presupuestos','precios','listas','lista_items']){
@@ -1113,7 +1116,15 @@ async function syncNow(manual){
     S._dirty=[];S.config.last_sync=data.server_time||Date.now();save();updateSyncDot();
     if(manual)toast('Sincronizado 🟢'+(pulled?' · '+pulled+' nuevos':''));
     if(pulled)render(VIEW);
-  }catch(e){if(manual)toast('⚠️ No se pudo sincronizar')}
+  }catch(e){if(manual){
+    const msgs={
+      unauthorized:'⚠️ Token incorrecto — no coincide con el del script',
+      server_not_configured:'⚠️ Falta la propiedad TOKEN en el script',
+      not_json:'⚠️ Revisá la implementación: "Ejecutar como: Yo" y acceso "Cualquier persona"',
+      network:'⚠️ Sin conexión o URL inválida',
+      rate_limited:'⚠️ Demasiados intentos — esperá un minuto',
+      bad_request:'⚠️ Versión del script desactualizada'};
+    toast(msgs[e.message]||'⚠️ No se pudo sincronizar')}}
   finally{syncing=false}}
 window.addEventListener('online',()=>syncNow(false));
 
