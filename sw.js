@@ -1,5 +1,7 @@
-/* PLATA — service worker: cache-first para funcionar offline */
-const CACHE = 'plata-v1';
+/* PLATA — service worker
+   index.html: network-first (las actualizaciones de la app llegan solas)
+   resto: cache-first (funciona offline) */
+const CACHE = 'plata-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', e => {
@@ -12,6 +14,19 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return; // el sync va directo a la red
   const url = new URL(e.request.url);
   if (url.origin !== location.origin && !url.hostname.includes('fonts.g')) return;
+
+  const isApp = e.request.mode === 'navigate' || url.pathname.endsWith('index.html');
+  if (isApp) {
+    // network-first: si hay internet trae la última versión; si no, usa la copia guardada
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
       const copy = res.clone();

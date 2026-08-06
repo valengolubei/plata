@@ -266,6 +266,27 @@ nav.bottom{position:fixed;bottom:0;left:0;right:0;z-index:60;max-width:640px;mar
   font-size:14px;font-weight:700;padding:12px 20px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:99;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
+/* ============ LISTAS ============ */
+.nav-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:17px;height:17px;border-radius:9px;background:var(--acc);color:var(--on-acc);
+  font-size:10.5px;font-weight:800;display:none;align-items:center;justify-content:center;padding:0 4px}
+.lst-tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;margin-bottom:var(--sp3);scrollbar-width:none}
+.lst-tabs::-webkit-scrollbar{display:none}
+.add-item{display:flex;gap:8px;margin-bottom:var(--sp4)}
+.add-item input{flex:1}
+.add-item .go{width:52px;flex:none;border-radius:var(--r-sm);background:var(--acc);color:var(--on-acc);display:grid;place-items:center;min-height:48px}
+.li-row{display:flex;align-items:center;gap:13px;padding:13px 10px;margin:0 -10px;border-radius:var(--r-sm);cursor:pointer;transition:background .15s;min-height:54px}
+.li-row:active{background:var(--s2)}
+.li-check{width:26px;height:26px;border-radius:50%;border:2px solid var(--line2);flex:none;display:grid;place-items:center;transition:.18s;color:transparent}
+.li-row.done .li-check{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.li-check svg{width:15px;height:15px;stroke-width:3}
+.li-t{flex:1;font-size:15.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.18s}
+.li-row.done .li-t{color:var(--tx3);text-decoration:line-through;text-decoration-color:var(--tx3)}
+.li-time{font-size:11.5px;color:var(--tx3);font-weight:600;flex:none}
+.li-del{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--tx3);flex:none}
+.li-del:active{background:var(--danger-dim);color:var(--danger)}
+.done-h{display:flex;align-items:center;justify-content:space-between;margin:var(--sp4) 2px var(--sp1)}
+.done-h span{font-size:12.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3)}
+.done-h button{font-size:13px;font-weight:700;color:var(--danger);padding:6px;margin:-6px}
 @media(min-width:560px){ .kpis{grid-template-columns:repeat(4,1fr)} .cur-cards{flex-direction:row}.ccard{flex:1} }
 svg text{font-family:var(--sans);font-weight:600}
 </style>
@@ -284,6 +305,7 @@ svg text{font-family:var(--sans);font-weight:600}
     <section class="view" id="view-movs"></section>
     <section class="view" id="view-dash"></section>
     <section class="view" id="view-precios"></section>
+    <section class="view" id="view-listas"></section>
     <section class="view" id="view-fijos"></section>
     <section class="view" id="view-ajustes"></section>
   </main>
@@ -293,6 +315,7 @@ svg text{font-family:var(--sans);font-weight:600}
   <button class="nbtn" data-v="inicio"><svg class="ic" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>Inicio</button>
   <button class="nbtn" data-v="movs"><svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></svg>Movs</button>
   <button id="fab" aria-label="Nuevo movimiento"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="nbtn" data-v="listas" style="position:relative"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 5.5 1.2 1.2L6.5 4.4"/><path d="m3 11.5 1.2 1.2 2.3-2.3"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>Listas<span class="nav-badge" id="listas-badge"></span></button>
   <button class="nbtn" data-v="dash"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Análisis</button>
   <button class="nbtn" data-v="precios"><svg class="ic" viewBox="0 0 24 24"><path d="M20.6 13.4 12 22 2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Precios</button>
 </nav>
@@ -350,6 +373,8 @@ const DEFAULTS={
     {id:'cat_sueldo',nombre:'Sueldo',emoji:'💼',tipo:'ingreso',activa:1},
     {id:'cat_extra',nombre:'Otro ingreso',emoji:'✨',tipo:'ingreso',activa:1}],
   movs:[],fijos:[],presupuestos:[],precios:[],
+  listas:[{id:'lst_super',nombre:'Súper',emoji:'🛒',activa:1},{id:'lst_pend',nombre:'Pendientes',emoji:'📌',activa:1}],
+  lista_items:[],
   config:{sync_url:'',sync_token:'',last_sync:0},
   _dirty:[]};
 let S=load();
@@ -412,7 +437,7 @@ function nav(v){VIEW=v;
 $$('.nbtn').forEach(b=>b.onclick=()=>nav(b.dataset.v));
 $('#btn-ajustes').onclick=()=>nav('ajustes');
 $('#fab').onclick=()=>openMovForm();
-function render(v){({inicio:rInicio,movs:rMovs,dash:rDash,precios:rPrecios,fijos:rFijos,ajustes:rAjustes})[v]()}
+function render(v){({inicio:rInicio,movs:rMovs,dash:rDash,precios:rPrecios,listas:rListas,fijos:rFijos,ajustes:rAjustes})[v]();updateListasBadge()}
 
 function openSheet(html){$('#sheet').innerHTML=html;$('#sheet-bg').classList.add('on');
   requestAnimationFrame(()=>$('#sheet').classList.add('on'))}
@@ -475,6 +500,10 @@ function rInicio(){
     <div class="sec-h"><h2>Gastos recurrentes</h2><button class="sec-link" onclick="nav('fijos')">${S.fijos.filter(f=>!f.deleted).length?'Gestionar':'Crear'} ${ICON.right}</button></div>
     ${fijosHtml?`<div class="card">${fijosHtml}</div>`:
       `<div class="card" style="color:var(--tx2);font-size:14px;line-height:1.6">Alquiler, internet, suscripciones… Marcá <b style="color:var(--tx)">"Se repite"</b> al cargar un gasto y se registra solo cada período. 🔁</div>`}
+    ${pendientesTotal()?`<div class="sec-h"><h2>Por comprar</h2><button class="sec-link" onclick="nav('listas')">Ver listas ${ICON.right}</button></div>
+      <div class="card" style="display:flex;align-items:center;gap:13px;cursor:pointer" onclick="nav('listas')">
+        <div class="nf-emo">📝</div><div style="flex:1;font-weight:700">${pendientesTotal()} ${pendientesTotal()===1?'cosa pendiente':'cosas pendientes'}
+        <small style="display:block;color:var(--tx3);font-weight:500;font-size:12.5px">${activeListas().filter(l=>itemsDe(l.id).some(i=>!i.checked)).map(l=>l.emoji+' '+esc(l.nombre)).join(' · ')}</small></div>${ICON.right}</div>`:''}
     ${!activeMovs().length?`<div class="empty" style="margin-top:28px"><span class="e-emo">👋</span><b>¡Hola! Empecemos</b>Tocá el botón verde <b style="color:var(--acc)">+</b> para cargar tu primer gasto.<br>Lleva menos de 10 segundos.</div>`:''}`;
 }
 
@@ -828,6 +857,77 @@ function delPrecio(id){const p=S.precios.find(x=>x.id===id);if(!confirm('¿Elimi
   p.deleted=1;touch('precios',p);closeSheet();rPrecios();toast('Eliminado')}
 
 /* =====================================================
+   LISTAS (pendientes / súper)
+===================================================== */
+const DONE_TTL=12*3600*1000; // lo tachado se borra solo a las 12 h
+let LV={lista:'lst_super'};
+function activeListas(){return S.listas.filter(l=>!l.deleted&&l.activa)}
+function itemsDe(lst){return S.lista_items.filter(i=>!i.deleted&&i.lista===lst)}
+function pendientesTotal(){return S.lista_items.filter(i=>!i.deleted&&!i.checked).length}
+function updateListasBadge(){const b=$('#listas-badge');if(!b)return;const n=pendientesTotal();
+  b.style.display=n?'flex':'none';b.textContent=n>99?'99+':n}
+function purgeChecked(){const now=Date.now();let n=0;
+  for(const i of S.lista_items){if(!i.deleted&&i.checked&&i.checked_at&&now-i.checked_at>DONE_TTL){i.deleted=1;touch('lista_items',i);n++}}
+  return n}
+function timeLeft(i){const ms=DONE_TTL-(Date.now()-(i.checked_at||Date.now()));
+  if(ms<=0)return'…';const h=Math.floor(ms/3600000);
+  return h>=1?'se borra en '+h+' h':'se borra en '+Math.max(1,Math.round(ms/60000))+' min'}
+function rListas(){
+  purgeChecked();
+  const listas=activeListas();
+  if(!listas.some(l=>l.id===LV.lista))LV.lista=listas[0]?.id||'';
+  const items=itemsDe(LV.lista).sort((a,b)=>(b.creado_en||0)-(a.creado_en||0));
+  const pend=items.filter(i=>!i.checked), done=items.filter(i=>i.checked).sort((a,b)=>(b.checked_at||0)-(a.checked_at||0));
+  const row=i=>`<div class="li-row ${i.checked?'done':''}" onclick="toggleItem('${i.id}')">
+    <span class="li-check"><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+    <span class="li-t">${esc(i.texto)}</span>
+    ${i.checked?`<span class="li-time">${timeLeft(i)}</span>`:''}
+    <button class="li-del" onclick="event.stopPropagation();delItem('${i.id}')" aria-label="Eliminar"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>`;
+  $('#view-listas').innerHTML=`
+    <div class="sec-h"><h2>Listas</h2><button class="sec-link" onclick="openListaForm()">＋ Nueva lista</button></div>
+    <div class="lst-tabs">${listas.map(l=>
+      `<button class="fchip ${LV.lista===l.id?'on':''}" onclick="LV.lista='${l.id}';rListas()">${l.emoji||'📋'} ${esc(l.nombre)}
+        ${itemsDe(l.id).filter(i=>!i.checked).length?`<b>${itemsDe(l.id).filter(i=>!i.checked).length}</b>`:''}</button>`).join('')}
+      ${listas.length?`<button class="fchip" onclick="openListaForm('${LV.lista}')" aria-label="Editar lista">${ICON.edit}</button>`:''}</div>
+    <div class="add-item">
+      <input id="li-new" placeholder="Agregar… (ej: yerba, papel higiénico)" enterkeyhint="done" onkeydown="if(event.key==='Enter')addItem()">
+      <button class="go" onclick="addItem()" aria-label="Agregar"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    ${pend.length?`<div class="card" style="padding:6px 16px">${pend.map(row).join('')}</div>`:
+      done.length?'':`<div class="empty"><span class="e-emo">📝</span><b>Lista vacía</b>Anotá lo que te falta comprar.<br>Tocás un ítem para tacharlo, y lo tachado se borra solo a las 12 horas.</div>`}
+    ${done.length?`<div class="done-h"><span>✓ Comprado (${done.length})</span><button onclick="clearDone()">Limpiar ahora</button></div>
+      <div class="card" style="padding:6px 16px;opacity:.75">${done.map(row).join('')}</div>
+      <div class="hint">Si tachaste algo por error, tocalo de nuevo y vuelve a pendientes.</div>`:''}`;
+}
+function addItem(){const inp=$('#li-new');const t=(inp?.value||'').trim();
+  if(!t)return;if(!LV.lista)return toast('Creá una lista primero');
+  const i={id:uid('li'),lista:LV.lista,texto:t,checked:0,creado_en:Date.now()};
+  S.lista_items.push(i);touch('lista_items',i);inp.value='';rListas();$('#li-new')?.focus()}
+function toggleItem(id){const i=S.lista_items.find(x=>x.id===id);if(!i)return;
+  i.checked=i.checked?0:1;i.checked_at=i.checked?Date.now():null;
+  touch('lista_items',i);rListas()}
+function delItem(id){const i=S.lista_items.find(x=>x.id===id);i.deleted=1;touch('lista_items',i);rListas()}
+function clearDone(){itemsDe(LV.lista).filter(i=>i.checked).forEach(i=>{i.deleted=1;touch('lista_items',i)});rListas();toast('Lista limpia ✓')}
+let LF={};
+function openListaForm(id){const l=id?S.listas.find(x=>x.id===id):null;
+  LF=l?{...l}:{nombre:'',emoji:'',activa:1};LF._edit=!!l;
+  openSheet(`<div class="grip"></div><h3>${LF._edit?'Editar lista':'Nueva lista'}
+    <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
+    <div class="newcat" style="margin:0 0 16px">
+      <input value="${esc(LF.emoji)}" oninput="LF.emoji=this.value" maxlength="4" placeholder="🛒" aria-label="Emoji">
+      <input value="${esc(LF.nombre)}" oninput="LF.nombre=this.value" placeholder="Nombre (Súper, Farmacia, Casa…)" aria-label="Nombre"></div>
+    <button class="btn" onclick="saveLista()">${ICON.check} Guardar</button>
+    ${LF._edit?`<button class="btn danger" onclick="delLista('${LF.id}')">Eliminar lista</button>`:''}`)}
+function saveLista(){if(!LF.nombre.trim())return toast('Falta el nombre');
+  if(!LF.emoji.trim())LF.emoji='📋';
+  if(LF._edit){const i=S.listas.findIndex(x=>x.id===LF.id);const{_edit,...c}=LF;S.listas[i]=c;touch('listas',S.listas[i])}
+  else{const{_edit,...c}=LF;c.id=uid('lst');S.listas.push(c);touch('listas',c);LV.lista=c.id}
+  closeSheet();rListas();toast('Guardado ✓')}
+function delLista(id){if(!confirm('¿Eliminar la lista y todos sus ítems?'))return;
+  const l=S.listas.find(x=>x.id===id);l.deleted=1;touch('listas',l);
+  S.lista_items.filter(i=>i.lista===id&&!i.deleted).forEach(i=>{i.deleted=1;touch('lista_items',i)});
+  closeSheet();rListas();toast('Lista eliminada')}
+
+/* =====================================================
    RECURRENTES (gestión)
 ===================================================== */
 function rFijos(){
@@ -1018,7 +1118,7 @@ async function syncNow(manual){
     const data=await res.json();
     if(data.error)throw new Error(data.error);
     let pulled=0;
-    for(const coll of['cuentas','categorias','movs','fijos','presupuestos','precios']){
+    for(const coll of['cuentas','categorias','movs','fijos','presupuestos','precios','listas','lista_items']){
       for(const remote of(data.pull?.[coll]||[])){
         const arr=S[coll];const i=arr.findIndex(x=>x.id===remote.id);
         if(i<0){arr.push(remote);pulled++}
@@ -1031,7 +1131,7 @@ async function syncNow(manual){
 window.addEventListener('online',()=>syncNow(false));
 
 /* ---------- arranque ---------- */
-autopostFijos();
+autopostFijos();purgeChecked();
 nav('inicio');updateSyncDot();
 if(S.config.sync_url)setTimeout(()=>syncNow(false),900);
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){navigator.serviceWorker.register('sw.js').catch(()=>{})}
