@@ -266,6 +266,9 @@ nav.bottom{position:fixed;bottom:0;left:0;right:0;z-index:60;max-width:640px;mar
   font-size:14px;font-weight:700;padding:12px 20px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:99;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
+.back-btn{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:700;color:var(--tx2);
+  padding:10px 14px 10px 8px;margin:8px 0 0 -8px;min-height:44px;border-radius:var(--r-sm);transition:.15s}
+.back-btn:active{background:var(--s1);color:var(--tx)}
 /* ============ LISTAS ============ */
 .nav-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:17px;height:17px;border-radius:9px;background:var(--acc);color:var(--on-acc);
   font-size:10.5px;font-weight:800;display:none;align-items:center;justify-content:center;padding:0 4px}
@@ -302,7 +305,6 @@ svg text{font-family:var(--sans);font-weight:600}
   </header>
   <main>
     <section class="view" id="view-inicio"></section>
-    <section class="view" id="view-movs"></section>
     <section class="view" id="view-dash"></section>
     <section class="view" id="view-precios"></section>
     <section class="view" id="view-listas"></section>
@@ -313,11 +315,10 @@ svg text{font-family:var(--sans);font-weight:600}
 
 <nav class="bottom">
   <button class="nbtn" data-v="inicio"><svg class="ic" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>Inicio</button>
-  <button class="nbtn" data-v="movs"><svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></svg>Movs</button>
-  <button id="fab" aria-label="Nuevo movimiento"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-  <button class="nbtn" data-v="listas" style="position:relative"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 5.5 1.2 1.2L6.5 4.4"/><path d="m3 11.5 1.2 1.2 2.3-2.3"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>Listas<span class="nav-badge" id="listas-badge"></span></button>
   <button class="nbtn" data-v="dash"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Análisis</button>
+  <button id="fab" aria-label="Nuevo movimiento"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
   <button class="nbtn" data-v="precios"><svg class="ic" viewBox="0 0 24 24"><path d="M20.6 13.4 12 22 2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/></svg>Precios</button>
+  <button class="nbtn" data-v="listas" style="position:relative"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 5.5 1.2 1.2L6.5 4.4"/><path d="m3 11.5 1.2 1.2 2.3-2.3"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>Listas<span class="nav-badge" id="listas-badge"></span></button>
 </nav>
 
 <div class="sheet-bg" id="sheet-bg"></div>
@@ -435,9 +436,9 @@ function nav(v){VIEW=v;
   $('#btn-ajustes').classList.toggle('on',v==='ajustes');
   render(v);window.scrollTo({top:0})}
 $$('.nbtn').forEach(b=>b.onclick=()=>nav(b.dataset.v));
-$('#btn-ajustes').onclick=()=>nav('ajustes');
+$('#btn-ajustes').onclick=()=>nav(VIEW==='ajustes'||VIEW==='fijos'?'inicio':'ajustes');
 $('#fab').onclick=()=>openMovForm();
-function render(v){({inicio:rInicio,movs:rMovs,dash:rDash,precios:rPrecios,listas:rListas,fijos:rFijos,ajustes:rAjustes})[v]();updateListasBadge()}
+function render(v){({inicio:rInicio,movs:rInicio,dash:rDash,precios:rPrecios,listas:rListas,fijos:rFijos,ajustes:rAjustes})[v]();updateListasBadge()}
 
 function openSheet(html){$('#sheet').innerHTML=html;$('#sheet-bg').classList.add('on');
   requestAnimationFrame(()=>$('#sheet').classList.add('on'))}
@@ -470,48 +471,7 @@ function rInicio(){
       <div class="cc-sub">${inc?`<span class="in num">+${fmt(inc)} ingresados</span>`:''}<span>${movsMes(mk,null,mon).length} movimientos</span></div>
       ${extraCtas}</div>`}).join('');
 
-  // presupuestos
-  let buds='';
-  const ps=S.presupuestos.filter(p=>!p.deleted);
-  if(ps.length){
-    buds=ps.map(p=>{const g=(gastoMesCat(mk,p.moneda)[p.categoria]||0);
-      const tope=+p.monto_mensual;const pct=Math.min(100,g/tope*100);const over=g>tope;
-      const c=cat(p.categoria);const col=over?'var(--danger)':pct>80?'var(--warn)':'var(--acc)';
-      return `<div class="bud-row"><div class="bud-top"><span class="b-emo">${c?.emoji||'·'}</span>
-        <b>${esc(c?.nombre||'?')}</b>
-        ${over?`<span class="bud-alert">⚠ pasado</span>`:''}
-        <span class="num"><b>${fmt(g)}</b> / ${fmt(tope)} ${p.moneda}</span></div>
-        <div class="bar"><i style="width:${pct}%;--bc:${col}"></i></div></div>`}).join('')}
-
-  // próximos recurrentes
-  const próximos=S.fijos.filter(f=>!f.deleted&&f.activo)
-    .map(f=>({...f,due:nextDue(f)})).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,3);
-  const fijosHtml=próximos.map(f=>{const c=cat(f.categoria);
-    return `<div class="next-fijo"><div class="nf-emo">${c?.emoji||'🔁'}</div>
-      <div class="nf-body"><div class="nf-n">${esc(f.nombre)}</div>
-      <div class="nf-s">${FRECS[f.frecuencia||'mensual']} · próximo: ${fmtDay(f.due)}</div></div>
-      <div class="nf-amt num">${fmt(+f.monto)}<small>${f.moneda}</small></div></div>`}).join('');
-
-  $('#view-inicio').innerHTML=`
-    <div class="hero"><div class="h-mes">${ICON.repeat.replace('ic','ic" style="width:15px;height:15px;color:var(--tx3)')}
-      <span><b>${MESES[+mk.slice(5)-1].charAt(0).toUpperCase()+MESES[+mk.slice(5)-1].slice(1)}</b> ${mk.slice(0,4)}</span></div>
-    <div class="cur-cards">${curCards}</div></div>
-    ${buds?`<div class="sec-h"><h2>Presupuestos</h2><button class="sec-link" onclick="nav('dash')">Análisis ${ICON.right}</button></div><div class="card">${buds}</div>`:''}
-    <div class="sec-h"><h2>Gastos recurrentes</h2><button class="sec-link" onclick="nav('fijos')">${S.fijos.filter(f=>!f.deleted).length?'Gestionar':'Crear'} ${ICON.right}</button></div>
-    ${fijosHtml?`<div class="card">${fijosHtml}</div>`:
-      `<div class="card" style="color:var(--tx2);font-size:14px;line-height:1.6">Alquiler, internet, suscripciones… Marcá <b style="color:var(--tx)">"Se repite"</b> al cargar un gasto y se registra solo cada período. 🔁</div>`}
-    ${pendientesTotal()?`<div class="sec-h"><h2>Por comprar</h2><button class="sec-link" onclick="nav('listas')">Ver listas ${ICON.right}</button></div>
-      <div class="card" style="display:flex;align-items:center;gap:13px;cursor:pointer" onclick="nav('listas')">
-        <div class="nf-emo">📝</div><div style="flex:1;font-weight:700">${pendientesTotal()} ${pendientesTotal()===1?'cosa pendiente':'cosas pendientes'}
-        <small style="display:block;color:var(--tx3);font-weight:500;font-size:12.5px">${activeListas().filter(l=>itemsDe(l.id).some(i=>!i.checked)).map(l=>l.emoji+' '+esc(l.nombre)).join(' · ')}</small></div>${ICON.right}</div>`:''}
-    ${!activeMovs().length?`<div class="empty" style="margin-top:28px"><span class="e-emo">👋</span><b>¡Hola! Empecemos</b>Tocá el botón verde <b style="color:var(--acc)">+</b> para cargar tu primer gasto.<br>Lleva menos de 10 segundos.</div>`:''}`;
-}
-
-/* =====================================================
-   MOVIMIENTOS
-===================================================== */
-let FIL={mes:monthKey(todayStr()),categoria:'',moneda:'',q:''};
-function rMovs(){
+  // ---- movimientos (fusionados en Inicio) ----
   const meses=[...new Set(activeMovs().map(m=>monthKey(m.fecha)))].sort().reverse();
   if(meses.length&&!meses.includes(FIL.mes))FIL.mes=meses[0];
   const list=activeMovs().filter(m=>
@@ -519,24 +479,33 @@ function rMovs(){
     (!FIL.q||(m.descripcion||'').toLowerCase().includes(FIL.q.toLowerCase())||(cat(m.categoria)?.nombre||'').toLowerCase().includes(FIL.q.toLowerCase())))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado_en||0)-(a.creado_en||0));
   const byDay={};list.forEach(m=>{(byDay[m.fecha]=byDay[m.fecha]||[]).push(m)});
-  let html='';
+  let movsHtml='';
   for(const d of Object.keys(byDay).sort().reverse()){
     const tot={};byDay[d].forEach(m=>{if(m.tipo==='gasto')tot[m.moneda]=(tot[m.moneda]||0)+ +m.monto});
     const totS=Object.entries(tot).map(([c,v])=>`−${fmt(v)} ${c}`).join(' · ');
-    html+=`<div class="day-h"><span>${fmtDay(d)}</span><span class="num">${totS}</span></div>`;
-    html+=byDay[d].map(movRow).join('')}
-  $('#view-movs').innerHTML=`
-    <div class="searchbar">${ICON.search}<input placeholder="Buscar…" value="${esc(FIL.q)}" oninput="FIL.q=this.value;rMovs()" aria-label="Buscar movimientos"></div>
+    movsHtml+=`<div class="day-h"><span>${fmtDay(d)}</span><span class="num">${totS}</span></div>`;
+    movsHtml+=byDay[d].map(movRow).join('')}
+
+  $('#view-inicio').innerHTML=`
+    <div class="hero"><div class="h-mes">${ICON.repeat.replace('ic','ic" style="width:15px;height:15px;color:var(--tx3)')}
+      <span><b>${MESES[+mk.slice(5)-1].charAt(0).toUpperCase()+MESES[+mk.slice(5)-1].slice(1)}</b> ${mk.slice(0,4)}</span></div>
+    <div class="cur-cards">${curCards}</div></div>
+    ${activeMovs().length?`
+    <div class="sec-h"><h2>Movimientos</h2></div>
+    <div class="searchbar">${ICON.search}<input id="search-inp" placeholder="Buscar…" value="${esc(FIL.q)}" oninput="FIL.q=this.value;FIL._fs=1;rInicio()" aria-label="Buscar movimientos"></div>
     <div class="filters">
-      <select class="fchip" onchange="FIL.mes=this.value;rMovs()" aria-label="Mes">
+      <select class="fchip" onchange="FIL.mes=this.value;rInicio()" aria-label="Mes">
         ${meses.map(m=>`<option value="${m}" ${m===FIL.mes?'selected':''}>${MES3[+m.slice(5)-1]} ${m.slice(0,4)}</option>`).join('')||'<option>este mes</option>'}</select>
-      <button class="fchip ${!FIL.moneda?'on':''}" onclick="FIL.moneda='';rMovs()">Todas</button>
-      ${monedasEnUso().map(c=>`<button class="fchip ${FIL.moneda===c?'on':''}" onclick="FIL.moneda='${c}';rMovs()">${c}</button>`).join('')}
-      <select class="fchip" onchange="FIL.categoria=this.value;rMovs()" aria-label="Categoría">
+      <button class="fchip ${!FIL.moneda?'on':''}" onclick="FIL.moneda='';rInicio()">Todas</button>
+      ${mons.map(c=>`<button class="fchip ${FIL.moneda===c?'on':''}" onclick="FIL.moneda='${c}';rInicio()">${c}</button>`).join('')}
+      <select class="fchip" onchange="FIL.categoria=this.value;rInicio()" aria-label="Categoría">
         <option value="">Categoría</option>${S.categorias.filter(c=>c.activa).map(c=>`<option value="${c.id}" ${FIL.categoria===c.id?'selected':''}>${c.emoji} ${esc(c.nombre)}</option>`).join('')}</select>
     </div>
-    ${html||`<div class="empty"><span class="e-emo">🔍</span><b>Nada por acá</b>No hay movimientos con estos filtros.</div>`}`;
+    ${movsHtml||`<div class="empty"><span class="e-emo">🔍</span><b>Nada por acá</b>No hay movimientos con estos filtros.</div>`}`:
+    `<div class="empty" style="margin-top:28px"><span class="e-emo">👋</span><b>¡Hola! Empecemos</b>Tocá el botón verde <b style="color:var(--acc)">+</b> para cargar tu primer gasto.<br>Lleva menos de 10 segundos.</div>`}`;
+  if(FIL._fs){const el=$('#search-inp');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}FIL._fs=0}
 }
+let FIL={mes:monthKey(todayStr()),categoria:'',moneda:'',q:''};
 function movRow(m){
   const c=cat(m.categoria);
   if(m.tipo==='transferencia'){
@@ -723,6 +692,16 @@ function rDash(){
       <div class="kpi"><div class="k-l">Balance</div><div class="k-v num ${inc-g>=0?'pos':''}">${fmt(inc-g)}</div></div>
       <div class="kpi"><div class="k-l">Movimientos</div><div class="k-v num">${movsMes(mk,null,DM.mon).length}</div></div>
     </div>
+    ${(()=>{const ps=S.presupuestos.filter(p=>!p.deleted&&p.moneda===DM.mon);if(!ps.length)return'';
+      const buds=ps.map(p=>{const gg=(byCat[p.categoria]||0);
+        const tope=+p.monto_mensual;const pct=Math.min(100,gg/tope*100);const over=gg>tope;
+        const c=cat(p.categoria);const col=over?'var(--danger)':pct>80?'var(--warn)':'var(--acc)';
+        return `<div class="bud-row"><div class="bud-top"><span class="b-emo">${c?.emoji||'·'}</span>
+          <b>${esc(c?.nombre||'?')}</b>
+          ${over?`<span class="bud-alert">⚠ pasado</span>`:''}
+          <span class="num"><b>${fmt(gg)}</b> / ${fmt(tope)}</span></div>
+          <div class="bar"><i style="width:${pct}%;--bc:${col}"></i></div></div>`}).join('');
+      return `<div class="sec-h"><h2>Presupuestos</h2><button class="sec-link" onclick="nav('ajustes')">Editar ${ICON.right}</button></div><div class="card">${buds}</div>`})()}
     ${entries.length?`<div class="sec-h"><h2>¿En qué se fue?</h2></div><div class="card"><div style="display:flex;align-items:center;gap:20px">${donut}${`<div class="donut-leg">${leg}</div>`}</div></div>`:''}
     <div class="sec-h"><h2>Últimos 6 meses</h2></div><div class="card">${bars}</div>
     ${cmp?`<div class="sec-h"><h2>Comparado con ${MES3[+pk.slice(5)-1]}</h2></div><div class="card">${cmp}</div>`:''}
@@ -933,6 +912,7 @@ function delLista(id){if(!confirm('¿Eliminar la lista y todos sus ítems?'))ret
 function rFijos(){
   const list=S.fijos.filter(f=>!f.deleted).map(f=>({...f,due:nextDue(f)})).sort((a,b)=>(b.activo-a.activo)||a.due.localeCompare(b.due));
   $('#view-fijos').innerHTML=`
+    <button class="back-btn" onclick="nav('ajustes')"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M15 18l-6-6 6-6"/></svg> Volver</button>
     <div class="sec-h"><h2>Gastos recurrentes</h2></div>
     <div class="card" style="color:var(--tx2);font-size:13.5px;line-height:1.55;margin-bottom:14px">
       Se registran <b style="color:var(--tx)">solos</b> cada período — no tenés que hacer nada.
@@ -990,6 +970,13 @@ function delFijo(id){const f=S.fijos.find(x=>x.id===id);if(!confirm('¿Eliminar?
 function rAjustes(){
   const dirty=S._dirty.length;
   $('#view-ajustes').innerHTML=`
+    <button class="back-btn" onclick="nav('inicio')"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M15 18l-6-6 6-6"/></svg> Volver</button>
+    <div class="sec-h" style="margin-top:6px"><h2>Gastos recurrentes</h2></div>
+    <div class="card">
+      <div class="set-item" onclick="nav('fijos')">
+        <div class="s-emo">🔁</div>
+        <div class="grow">Gestionar recurrentes<small>${S.fijos.filter(f=>!f.deleted&&f.activo).length} activos — se registran solos cada período</small></div>
+        ${ICON.right}</div></div>
     <div class="sec-h"><h2>Monedas y cuentas</h2></div>
     <div class="card">${S.cuentas.map(c=>`
       <div class="set-item" onclick="openCtaForm('${c.id}')">
