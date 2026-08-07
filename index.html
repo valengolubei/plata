@@ -203,6 +203,11 @@ select.mtab{width:auto;flex:none;padding-right:34px}
 .pchip.best .pc-v,.pchip.best .pc-d{color:var(--acc)}
 .pchip.stale{opacity:.5}
 .pw{color:var(--warn)}
+.pager{display:flex;align-items:center;justify-content:center;gap:14px;margin:16px 0 4px}
+.pager button{width:46px;height:46px;border-radius:13px;border:1.5px solid var(--line);background:var(--s1);color:var(--tx);display:grid;place-items:center;transition:.15s}
+.pager button:active{transform:scale(.92)}
+.pager button[disabled]{opacity:.3}
+.pager span{font-size:13.5px;font-weight:700;color:var(--tx2);min-width:52px;text-align:center}
 .merge-bar{position:fixed;left:16px;right:16px;bottom:calc(96px + var(--safe-b));z-index:55;max-width:608px;margin:0 auto}
 .merge-bar .btn{box-shadow:0 10px 30px rgba(0,0,0,.55)}
 .btn[disabled]{opacity:.5;background:var(--s3);color:var(--tx2)}
@@ -510,13 +515,23 @@ function rInicio(){
     (!FIL.mes||monthKey(m.fecha)===FIL.mes)&&(!FIL.categoria||m.categoria===FIL.categoria)&&(!FIL.moneda||m.moneda===FIL.moneda)&&
     (!FIL.q||(m.descripcion||'').toLowerCase().includes(FIL.q.toLowerCase())||(cat(m.categoria)?.nombre||'').toLowerCase().includes(FIL.q.toLowerCase())))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado_en||0)-(a.creado_en||0));
-  const byDay={};list.forEach(m=>{(byDay[m.fecha]=byDay[m.fecha]||[]).push(m)});
+  // paginación de movimientos
+  const M_PAGE=15;
+  const mPages=Math.max(1,Math.ceil(list.length/M_PAGE));
+  if((FIL.pag||0)>=mPages)FIL.pag=mPages-1;if((FIL.pag||0)<0)FIL.pag=0;
+  const pageMovs=list.slice((FIL.pag||0)*M_PAGE,((FIL.pag||0)+1)*M_PAGE);
+  const byDay={};pageMovs.forEach(m=>{(byDay[m.fecha]=byDay[m.fecha]||[]).push(m)});
   let movsHtml='';
   for(const d of Object.keys(byDay).sort().reverse()){
-    const tot={};byDay[d].forEach(m=>{if(m.tipo==='gasto')tot[m.moneda]=(tot[m.moneda]||0)+ +m.monto});
+    const dayAll=list.filter(m=>m.fecha===d);
+    const tot={};dayAll.forEach(m=>{if(m.tipo==='gasto')tot[m.moneda]=(tot[m.moneda]||0)+ +m.monto});
     const totS=Object.entries(tot).map(([c,v])=>`−${fmt(v)} ${c}`).join(' · ');
     movsHtml+=`<div class="day-h"><span>${fmtDay(d)}</span><span class="num">${totS}</span></div>`;
     movsHtml+=byDay[d].map(movRow).join('')}
+  if(mPages>1)movsHtml+=`<div class="pager">
+    <button onclick="FIL.pag--;rInicio();window.scrollTo({top:0})" ${(FIL.pag||0)===0?'disabled':''} aria-label="Más recientes"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <span class="num">${(FIL.pag||0)+1} / ${mPages}</span>
+    <button onclick="FIL.pag++;rInicio();window.scrollTo({top:0})" ${(FIL.pag||0)>=mPages-1?'disabled':''} aria-label="Más antiguos"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M9 6l6 6-6 6"/></svg></button></div>`;
 
   $('#view-inicio').innerHTML=`
     <div class="hero"><div class="h-mes">${ICON.repeat.replace('ic','ic" style="width:15px;height:15px;color:var(--tx3)')}
@@ -524,20 +539,20 @@ function rInicio(){
     <div class="cur-cards">${curCards}</div></div>
     ${activeMovs().length?`
     <div class="sec-h"><h2>Movimientos</h2></div>
-    <div class="searchbar">${ICON.search}<input id="search-inp" placeholder="Buscar…" value="${esc(FIL.q)}" oninput="FIL.q=this.value;FIL._fs=1;rInicio()" aria-label="Buscar movimientos"></div>
+    <div class="searchbar">${ICON.search}<input id="search-inp" placeholder="Buscar…" value="${esc(FIL.q)}" oninput="FIL.q=this.value;FIL.pag=0;FIL._fs=1;rInicio()" aria-label="Buscar movimientos"></div>
     <div class="filters">
-      <select class="fchip" onchange="FIL.mes=this.value;rInicio()" aria-label="Mes">
+      <select class="fchip" onchange="FIL.mes=this.value;FIL.pag=0;rInicio()" aria-label="Mes">
         ${meses.map(m=>`<option value="${m}" ${m===FIL.mes?'selected':''}>${MES3[+m.slice(5)-1]} ${m.slice(0,4)}</option>`).join('')||'<option>este mes</option>'}</select>
-      <button class="fchip ${!FIL.moneda?'on':''}" onclick="FIL.moneda='';rInicio()">Todas</button>
-      ${mons.map(c=>`<button class="fchip ${FIL.moneda===c?'on':''}" onclick="FIL.moneda='${c}';rInicio()">${c}</button>`).join('')}
-      <select class="fchip" onchange="FIL.categoria=this.value;rInicio()" aria-label="Categoría">
+      <button class="fchip ${!FIL.moneda?'on':''}" onclick="FIL.moneda='';FIL.pag=0;rInicio()">Todas</button>
+      ${mons.map(c=>`<button class="fchip ${FIL.moneda===c?'on':''}" onclick="FIL.moneda='${c}';FIL.pag=0;rInicio()">${c}</button>`).join('')}
+      <select class="fchip" onchange="FIL.categoria=this.value;FIL.pag=0;rInicio()" aria-label="Categoría">
         <option value="">Categoría</option>${S.categorias.filter(c=>c.activa).map(c=>`<option value="${c.id}" ${FIL.categoria===c.id?'selected':''}>${c.emoji} ${esc(c.nombre)}</option>`).join('')}</select>
     </div>
     ${movsHtml||`<div class="empty"><span class="e-emo">🔍</span><b>Nada por acá</b>No hay movimientos con estos filtros.</div>`}`:
     `<div class="empty" style="margin-top:28px"><span class="e-emo">👋</span><b>¡Hola! Empecemos</b>Tocá el botón verde <b style="color:var(--acc)">+</b> para cargar tu primer gasto.<br>Lleva menos de 10 segundos.</div>`}`;
   if(FIL._fs){const el=$('#search-inp');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}FIL._fs=0}
 }
-let FIL={mes:monthKey(todayStr()),categoria:'',moneda:'',q:''};
+let FIL={mes:monthKey(todayStr()),categoria:'',moneda:'',q:'',pag:0};
 function movRow(m){
   const c=cat(m.categoria);
   if(m.tipo==='transferencia'){
@@ -829,7 +844,12 @@ function superRanking(cell,prods,supers){
     .sort((a,b)=>a.pct-b.pct);
   return scored.length>=2?{scored,nProds}:null}
 const pKey=p=>tkNorm(typeof p==='string'?p:p.producto).replace(/\s+/g,' ').trim();
-let PMM={on:false,sel:new Set()},PRQ='',PRQf=0;
+let PMM={on:false,sel:new Set()},PRQ='',PRQf=0,PRC='',PRP=0;
+const PR_PAGE=6;
+function prodCatOf(entries,name){
+  const cnt={};entries.forEach(p=>{if(p.cat)cnt[p.cat]=(cnt[p.cat]||0)+1});
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  return top?top[0]:tkCat(name)}
 function rPrecios(){
   const ps=activePrecios();
   const supers=[...new Set(ps.map(p=>p.super))].sort();
@@ -850,9 +870,27 @@ function rPrecios(){
           <span class="r-v num">${i===0?'el más barato':'+'+x.pct.toFixed(0)+'% más caro'}</span></div>`).join('')}
         <div class="hint">Comparando los ${rank.nProds} productos que cargaste en más de un comercio. Cuantos más precios anotes, más preciso.</div></div>`}
     const cutoff=Date.now()-45*864e5;
+    // categoría de cada producto (guardada en los precios, o deducida del nombre)
+    const catOf={};prods.forEach(pr=>{const es=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
+      catOf[pr]=prodCatOf(es,es[es.length-1]?.producto||pr)});
+    const catCounts={};prods.forEach(pr=>{catCounts[catOf[pr]]=(catCounts[catOf[pr]]||0)+1});
+    const catsPresent=['super','verduleria','carniceria'].filter(k=>catCounts[k]);
+    if(PRC&&!catCounts[PRC])PRC='';
     let list=prods;
-    if(PRQ.trim()){const q=tkNorm(PRQ);list=prods.filter(pr=>pr.includes(q))}
-    const cards=list.map(pr=>{
+    if(PRC)list=list.filter(pr=>catOf[pr]===PRC);
+    if(PRQ.trim()){const q=tkNorm(PRQ);list=list.filter(pr=>pr.includes(q))}
+    // paginación
+    const nPages=Math.max(1,Math.ceil(list.length/PR_PAGE));
+    if(PRP>=nPages)PRP=nPages-1;if(PRP<0)PRP=0;
+    const pageList=list.slice(PRP*PR_PAGE,(PRP+1)*PR_PAGE);
+    const catTabs=catsPresent.length>1?`<div class="filters" style="margin-bottom:10px">
+      <button class="fchip ${!PRC?'on':''}" onclick="PRC='';PRP=0;rPrecios()">Todo (${prods.length})</button>
+      ${catsPresent.map(k=>`<button class="fchip ${PRC===k?'on':''}" onclick="PRC='${k}';PRP=0;rPrecios()">${TK_CAT_DEF[k].emoji} ${TK_CAT_DEF[k].nombre} (${catCounts[k]})</button>`).join('')}</div>`:'';
+    const pager=nPages>1?`<div class="pager">
+      <button onclick="PRP--;rPrecios()" ${PRP===0?'disabled':''} aria-label="Anterior"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="num">${PRP+1} / ${nPages}</span>
+      <button onclick="PRP++;rPrecios()" ${PRP>=nPages-1?'disabled':''} aria-label="Siguiente"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M9 6l6 6-6 6"/></svg></button></div>`:'';
+    const cards=pageList.map(pr=>{
       const idx=prods.indexOf(pr);
       const entries=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
       const best=Math.min(...entries.map(p=>+p.precio));
@@ -871,10 +909,12 @@ function rPrecios(){
       return `<div class="pcard ${sel?'on':''}" ${PMM.on?`onclick="togglePMM(${idx})"`:''}>
         <div class="pc-h">${PMM.on?`<span class="mchk">${sel?'☑':'☐'}</span>`:''}<b>${esc(name)}</b>${mainSz?`<small>${mainSz}</small>`:''}</div>
         <div class="pc-prices">${chips}</div></div>`}).join('');
-    table=`<div class="searchbar" style="margin:0 0 12px">${ICON.search}<input id="pr-q" placeholder="Filtrar producto…" value="${esc(PRQ)}" oninput="PRQ=this.value;PRQf=1;rPrecios()" aria-label="Filtrar productos"></div>
-      ${cards||`<div class="hint">Ningún producto coincide con "${esc(PRQ)}".</div>`}
+    table=`${catTabs}
+      <div class="searchbar" style="margin:0 0 12px">${ICON.search}<input id="pr-q" placeholder="Filtrar producto…" value="${esc(PRQ)}" oninput="PRQ=this.value;PRP=0;PRQf=1;rPrecios()" aria-label="Filtrar productos"></div>
+      ${cards||`<div class="hint">Ningún producto coincide.</div>`}
+      ${pager}
       ${PMM.on?
-        `<div class="hint">Tocá las tarjetas que son el mismo producto — el botón para fusionar está abajo, fijo.</div><div style="height:88px"></div>`:
+        `<div class="hint">Tocá las tarjetas que son el mismo producto (podés cambiar de página o pestaña, la selección se mantiene) — el botón para fusionar está abajo, fijo.</div><div style="height:88px"></div>`:
         `<div class="hint" style="margin-top:12px"><span class="g">● verde</span> = el más barato, ordenados de menor a mayor · gris = precio viejo (+45 días) · tocá un precio para corregirlo</div>`}`}
   $('#view-precios').innerHTML=`
     <div class="sec-h"><h2>¿Dónde conviene comprar?</h2>
@@ -986,6 +1026,7 @@ function savePrecio(){
   if(!PF.producto.trim())return toast('Falta el producto');
   if(!(+PF.precio>0))return toast('Falta el precio');
   PF.super=PF.super.trim();PF.producto=PF.producto.trim();
+  if(!PF.cat)PF.cat=tkCat(PF.producto);
   if(PF._edit){const i=S.precios.findIndex(x=>x.id===PF.id);const{_edit,...c}=PF;S.precios[i]=c;touch('precios',S.precios[i])}
   else{const{_edit,...c}=PF;c.id=uid('pre');S.precios.push(c);touch('precios',c)}
   closeSheet();rPrecios();toast('Precio anotado ✓')}
@@ -1124,7 +1165,7 @@ function saveTicket(){
   const sup=TK.super.trim();const total=items.reduce((a,x)=>a+x.precio,0);
   if(TK.aPrecios)items.forEach(x=>{
     const p={id:uid('pre'),fecha:TK.fecha,super:sup,producto:x.producto,precio:x.precio,moneda:TK.moneda,
-      tamano:x.tamano||'',unidad:x.unidad||'un'};
+      tamano:x.tamano||'',unidad:x.unidad||'un',cat:x.cat||''};
     S.precios.push(p);touch('precios',p)});
   let nMovs=0;
   if(TK.aGasto){
