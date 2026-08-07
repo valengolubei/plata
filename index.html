@@ -185,6 +185,9 @@ select.mtab{width:auto;flex:none;padding-right:34px}
 .rank-row .bar{flex:1}
 .rank-row .r-v{width:104px;text-align:right;font-size:12.5px;font-weight:700;flex:none;color:var(--tx2)}
 .rank-row.best .r-v{color:var(--acc)}
+.price-table tr.msel td{background:var(--acc-dim)!important}
+.price-table .mchk{color:var(--acc);font-size:15px;margin-right:2px}
+.price-table tr[onclick]{cursor:pointer}
 .price-table td.best{color:var(--acc);font-weight:800;position:relative}
 .price-table td.best::after{content:'●';font-size:6px;position:absolute;top:8px;right:2px;color:var(--acc)}
 .price-table td.stale{color:var(--tx3);font-weight:500}
@@ -783,11 +786,14 @@ function superRanking(cell,prods,supers){
     .map(([s,r])=>({s,n:r.length,pct:(r.reduce((a,b)=>a+b,0)/r.length-1)*100}))
     .sort((a,b)=>a.pct-b.pct);
   return scored.length>=2?{scored,nProds}:null}
+const pKey=p=>tkNorm(typeof p==='string'?p:p.producto).replace(/\s+/g,' ').trim();
+let PMM={on:false,sel:new Set()};
 function rPrecios(){
   const ps=activePrecios();
   const supers=[...new Set(ps.map(p=>p.super))].sort();
-  const prods=[...new Set(ps.map(p=>p.producto.toLowerCase().trim()))].sort();
-  const cell={};for(const p of ps.sort((a,b)=>a.fecha.localeCompare(b.fecha)))cell[p.producto.toLowerCase().trim()+'|'+p.super]=p;
+  const prods=[...new Set(ps.map(pKey))].sort();
+  window._pmProds=prods;
+  const cell={};for(const p of ps.sort((a,b)=>a.fecha.localeCompare(b.fecha)))cell[pKey(p)+'|'+p.super]=p;
   let table='',rankCard='';
   if(prods.length){
     // índice general de comercios
@@ -803,34 +809,86 @@ function rPrecios(){
         <div class="hint">Comparando los ${rank.nProds} productos que cargaste en más de un comercio. Cuantos más precios anotes, más preciso.</div></div>`}
     const cutoff=Date.now()-45*864e5;
     const abrev=s=>s.length>9?s.slice(0,8)+'…':s;
-    const rows=prods.map(pr=>{
+    const rows=prods.map((pr,pi)=>{
       const vals=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
       const nums=vals.map(p=>+p.precio);
       const best=Math.min(...nums);
-      const name=vals[0]?.producto||pr;
+      const name=vals[vals.length-1]?.producto||pr;
       // tamaño más frecuente del producto → va en la columna de producto
       const szCount={};vals.forEach(p=>{const z=szLabel(p);if(z)szCount[z]=(szCount[z]||0)+1});
       const mainSz=Object.entries(szCount).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+      const sel=PMM.on&&PMM.sel.has(pi);
       const cells=supers.map(s=>{const p=cell[pr+'|'+s];if(!p)return'<td style="color:var(--tx3)">—</td>';
         const v=+p.precio;
         const isBest=v===best&&nums.length>1;
         const old=new Date(p.fecha).getTime()<cutoff;
         const z=szLabel(p);
         const sz=z&&z!==mainSz?`<span class="csz">⚠ ${z}</span>`:'';
-        return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v)}${sz}</td>`}).join('');
-      return `<tr><td>${esc(name)}<small>${mainSz}</small></td>${cells}</tr>`}).join('');
+        return `<td class="${isBest?'best':old?'stale':''}" ${PMM.on?'':`onclick="openPrecioForm('${p.id}')"`}>${fmt(v)}${sz}</td>`}).join('');
+      return `<tr class="${sel?'msel':''}" ${PMM.on?`onclick="togglePMM(${pi})"`:''}>
+        <td>${PMM.on?`<span class="mchk">${sel?'☑':'☐'}</span> `:''}${esc(name)}<small>${mainSz}</small></td>${cells}</tr>`}).join('');
     table=`<div class="pt-scroll"><table class="price-table">
       <thead><tr><th>Producto</th>${supers.map(s=>`<th title="${esc(s)}">${esc(abrev(s))}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody></table></div>
-      <div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · deslizá la tabla para ver más comercios · tocá un precio para corregirlo</div>`}
+      ${PMM.on?
+        `<button class="btn" style="margin-top:14px" onclick="doMergeOpen()" ${PMM.sel.size<2?'disabled style="margin-top:14px;opacity:.4"':''}>🔀 Fusionar ${PMM.sel.size||''} seleccionados</button>
+         <div class="hint">Tocá las filas que son el mismo producto y después "Fusionar".</div>`:
+        `<div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · deslizá la tabla para ver más comercios · tocá un precio para corregirlo</div>`}`}
   $('#view-precios').innerHTML=`
-    <div class="sec-h"><h2>¿Dónde conviene comprar?</h2></div>
+    <div class="sec-h"><h2>¿Dónde conviene comprar?</h2>
+      ${prods.length>1?`<button class="sec-link" onclick="togglePMMode()" style="${PMM.on?'color:var(--danger)':''}">${PMM.on?'✕ Cancelar':'🔀 Fusionar'}</button>`:''}</div>
     <div style="display:flex;gap:10px;margin-bottom:18px">
       <button class="btn" style="flex:1" onclick="openPrecioForm()">🏷️ Un precio</button>
       <button class="btn ghost" style="flex:1;margin:0" onclick="openTicketForm()">🧾 Cargar ticket</button></div>
     ${rankCard}
-    ${table?`<div class="sec-h"><h2>Producto por producto</h2></div>${table}`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
+    ${table?`<div class="sec-h"><h2>Producto por producto</h2></div>${table}
+      <button class="btn-add" onclick="openCargas()">🗑 Deshacer una carga (ticket equivocado)</button>`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
 }
+function openCargas(){
+  const groups={};
+  activePrecios().forEach(p=>{const k=p.super+'|'+p.fecha;(groups[k]=groups[k]||[]).push(p)});
+  const cargas=Object.entries(groups).map(([k,arr])=>{const[sup,fecha]=k.split('|');
+    return {sup,fecha,n:arr.length,total:arr.reduce((a,p)=>a+ +p.precio,0),mon:arr[0].moneda}})
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  openSheet(`<div class="grip"></div><h3>Deshacer una carga
+    <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
+    <div class="hint" style="margin:0 0 14px">Cada fila es todo lo que cargaste de un comercio en un día. Al borrarla se van esos precios <b>y</b> los gastos que esa carga creó en movimientos.</div>
+    <div class="card" style="padding:4px 16px">${cargas.map(c=>`
+      <div class="set-item" onclick="delCarga('${esc(c.sup).replace(/'/g,"\\'")}','${c.fecha}')">
+        <div class="s-emo">🧾</div>
+        <div class="grow">${esc(c.sup)}<small>${fmtDay(c.fecha)} · ${c.n} precio${c.n===1?'':'s'} · total ${fmt(c.total)} ${c.mon}</small></div>
+        <span style="color:var(--danger);font-size:13px;font-weight:700">Borrar</span></div>`).join('')||'<div style="padding:14px;color:var(--tx2)">No hay cargas.</div>'}</div>`)}
+function delCarga(sup,fecha){
+  const precios=activePrecios().filter(p=>p.super===sup&&p.fecha===fecha);
+  const movs=activeMovs().filter(m=>m.tipo==='gasto'&&m.fecha===fecha&&new RegExp('^'+sup.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+' · \\d+ producto').test(m.descripcion||''));
+  if(!confirm('¿Borrar la carga de '+sup+' del '+fmtDay(fecha)+'?\n\n· '+precios.length+' precios del comparador'+(movs.length?'\n· '+movs.length+' gasto'+(movs.length===1?'':'s')+' en movimientos':'')))return;
+  precios.forEach(p=>{p.deleted=1;touch('precios',p)});
+  movs.forEach(m=>{m.deleted=1;touch('movs',m)});
+  closeSheet();rPrecios();
+  toast('✓ Carga borrada ('+precios.length+' precios'+(movs.length?' + '+movs.length+' gastos':'')+')')}
+function togglePMMode(){PMM.on=!PMM.on;PMM.sel=new Set();rPrecios()}
+function togglePMM(i){if(PMM.sel.has(i))PMM.sel.delete(i);else PMM.sel.add(i);rPrecios()}
+function doMergeOpen(){
+  if(PMM.sel.size<2)return;
+  const keys=[...PMM.sel].map(i=>window._pmProds[i]);
+  const names=[...new Set(activePrecios().filter(p=>keys.includes(pKey(p))).map(p=>p.producto))];
+  const def=names.sort((a,b)=>b.length-a.length)[0]||'';
+  openSheet(`<div class="grip"></div><h3>Fusionar productos
+    <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
+    <div class="card" style="margin-bottom:16px;font-size:14px;color:var(--tx2);line-height:1.6">
+      Vas a unir: ${names.map(n=>`<b style="color:var(--tx)">${esc(n)}</b>`).join(' + ')}<br>
+      Todos sus precios (de todos los comercios) quedan bajo un solo nombre.</div>
+    <div class="frow"><label>Nombre final</label><input id="mg-name" value="${esc(def)}"></div>
+    <button class="btn" onclick="doMerge()">${ICON.check} Fusionar</button>`)}
+function doMerge(){
+  const name=$('#mg-name').value.trim();
+  if(!name)return toast('Falta el nombre final');
+  const keys=[...PMM.sel].map(i=>window._pmProds[i]);
+  let n=0;
+  activePrecios().forEach(p=>{if(keys.includes(pKey(p))&&p.producto!==name){p.producto=name;touch('precios',p);n++}});
+  PMM.on=false;PMM.sel=new Set();
+  closeSheet();rPrecios();
+  toast('✓ Fusionados en "'+name+'"'+(n?' ('+n+' precios renombrados)':''))}
 let PF={};
 function openPrecioForm(id){
   const p=id?S.precios.find(x=>x.id===id):null;
