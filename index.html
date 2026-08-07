@@ -188,6 +188,10 @@ select.mtab{width:auto;flex:none;padding-right:34px}
 .price-table tr.msel td{background:var(--acc-dim)!important}
 .price-table .mchk{color:var(--acc);font-size:15px;margin-right:2px}
 .price-table tr[onclick]{cursor:pointer}
+.chips-sm{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips-sm:empty{display:none}
+.chips-sm .fchip{min-height:38px;padding:7px 13px;font-size:13px}
+.chips-sm .fchip.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
 .price-table td.best{color:var(--acc);font-weight:800;position:relative}
 .price-table td.best::after{content:'●';font-size:6px;position:absolute;top:8px;right:2px;color:var(--acc)}
 .price-table td.stale{color:var(--tx3);font-weight:500}
@@ -603,13 +607,33 @@ function drawMovForm(focus){
     <div class="amount-big"><input id="mf-monto" type="number" inputmode="decimal" step="any" placeholder="0"
       value="${MF.monto}" oninput="MF.monto=this.value;liveTC()" aria-label="Monto"></div>
     <div class="frow"><label style="margin-top:2px">${t==='transferencia'?'Sale de':'Moneda'}</label>${curChips('cuenta')}</div>
-    <div class="frow"><input placeholder="${t==='gasto'?'¿Qué compraste? (opcional)':t==='ingreso'?'¿De dónde vino? (opcional)':'Nota (opcional)'}"
-      value="${esc(MF.descripcion||'')}" oninput="MF.descripcion=this.value" aria-label="Descripción"></div>
+    <div class="frow"><input id="mf-desc" placeholder="${t==='gasto'?'¿Qué compraste? (opcional)':t==='ingreso'?'¿De dónde vino? (opcional)':'Nota (opcional)'}"
+      value="${esc(MF.descripcion||'')}" oninput="MF.descripcion=this.value;mfSug()" autocomplete="off" aria-label="Descripción">
+      <div id="mf-sug" class="chips-sm"></div></div>
     ${transf}${catGrid}${rep}${more}
     <button class="btn" onclick="saveMov()">${ICON.check} ${MF._edit?'Guardar cambios':'Guardar'}</button>
     ${MF._edit?`<button class="btn danger" onclick="delMov('${MF.id}')">Eliminar movimiento</button>`:''}`);
   if(focus&&!MF._edit&&!MF.monto)setTimeout(()=>$('#mf-monto')?.focus(),340);
 }
+function mfHistory(tipo){
+  const cnt={},disp={},cats={};
+  activeMovs().slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(m=>{
+    if(m.tipo!==tipo||!m.descripcion)return;
+    const k=tkNorm(m.descripcion);if(!k)return;
+    cnt[k]=(cnt[k]||0)+1;disp[k]=m.descripcion;if(m.categoria)cats[k]=m.categoria});
+  return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).map(k=>({texto:disp[k],categoria:cats[k]}))}
+function mfSug(){const box=$('#mf-sug');if(!box)return;
+  if(MF.tipo==='transferencia'){box.innerHTML='';return}
+  const q=tkNorm(MF.descripcion||'');
+  if(q.length<2){box.innerHTML='';return}
+  const matches=mfHistory(MF.tipo).filter(x=>{const n=tkNorm(x.texto);return n.includes(q)&&n!==q}).slice(0,5);
+  window._mfMatch=matches;
+  box.innerHTML=matches.map((m,i)=>{const c=cat(m.categoria);
+    return `<button class="fchip" onclick="mfPick(${i})">${c?c.emoji+' ':''}${esc(m.texto)}</button>`}).join('')}
+function mfPick(i){const m=window._mfMatch[i];
+  MF.descripcion=m.texto;
+  if(m.categoria&&cat(m.categoria)?.activa)MF.categoria=m.categoria;
+  drawMovForm()}
 function quickCat(tipo){
   const nom=$('#nc-nombre').value.trim();const emo=$('#nc-emoji').value.trim()||'🏷️';
   if(!nom)return toast('Poné un nombre a la categoría');
@@ -866,6 +890,15 @@ function delCarga(sup,fecha){
   movs.forEach(m=>{m.deleted=1;touch('movs',m)});
   closeSheet();rPrecios();
   toast('✓ Carga borrada ('+precios.length+' precios'+(movs.length?' + '+movs.length+' gastos':'')+')')}
+function knownSupers(){const seen=[];
+  activePrecios().slice().sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).forEach(p=>{if(p.super&&!seen.includes(p.super))seen.push(p.super)});
+  return seen}
+function knownProds(){const cnt={},disp={};
+  activePrecios().forEach(p=>{const k=pKey(p);cnt[k]=(cnt[k]||0)+1;disp[k]=p.producto});
+  return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).map(k=>disp[k])}
+function supChips(list,cur,pickFn){window._supChips=list;
+  return list.length?`<div class="chips-sm">${list.map((s,i)=>
+    `<button class="fchip ${cur===s?'on':''}" onclick="${pickFn}(${i})">${esc(s)}</button>`).join('')}</div>`:''}
 function togglePMMode(){PMM.on=!PMM.on;PMM.sel=new Set();rPrecios()}
 function togglePMM(i){if(PMM.sel.has(i))PMM.sel.delete(i);else PMM.sel.add(i);rPrecios()}
 function doMergeOpen(){
@@ -895,18 +928,26 @@ function openPrecioForm(id){
   const last=activePrecios().slice(-1)[0];
   PF=p?{...p}:{fecha:todayStr(),super:last?.super||'',producto:'',precio:'',moneda:last?.moneda||'ARS',tamano:'',unidad:'g'};
   PF._edit=!!p;drawPrecioForm()}
+function pfPickSup(i){PF.super=window._supChips[i];drawPrecioForm()}
+function pfSug(){const box=$('#pf-sug');if(!box)return;
+  const q=tkNorm(PF.producto||'');
+  if(q.length<2){box.innerHTML='';return}
+  const matches=knownProds().filter(p=>{const n=tkNorm(p);return n.includes(q)&&n!==q}).slice(0,6);
+  window._pfMatch=matches;
+  box.innerHTML=matches.map((m,i)=>`<button class="fchip" onclick="pfPickProd(${i})">${esc(m)}</button>`).join('')}
+function pfPickProd(i){PF.producto=window._pfMatch[i];
+  const inp=$('#pf-prod');if(inp)inp.value=PF.producto;
+  const box=$('#pf-sug');if(box)box.innerHTML=''}
 function drawPrecioForm(){
-  const supers=[...new Set(activePrecios().map(p=>p.super))];
-  const prodsKnown=[...new Set(activePrecios().map(p=>p.producto))];
   openSheet(`
     <div class="grip"></div>
     <h3>${PF._edit?'Editar precio':'Anotar precio'} <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
     <div class="frow"><label>Súper / comercio</label>
-      <input list="dl-supers" placeholder="Coto, Día, Carrefour…" value="${esc(PF.super)}" oninput="PF.super=this.value">
-      <datalist id="dl-supers">${supers.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+      ${supChips(knownSupers(),PF.super,'pfPickSup')}
+      <input placeholder="${knownSupers().length?'¿Otro lugar? Escribilo acá':'Coto, Día, Carrefour…'}" value="${esc(knownSupers().includes(PF.super)?'':PF.super)}" oninput="PF.super=this.value" style="margin-top:${knownSupers().length?'8px':'0'}"></div>
     <div class="frow"><label>Producto</label>
-      <input list="dl-prods" placeholder="Leche entera, café molido…" value="${esc(PF.producto)}" oninput="PF.producto=this.value">
-      <datalist id="dl-prods">${prodsKnown.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+      <input id="pf-prod" placeholder="Leche entera, café molido…" value="${esc(PF.producto)}" oninput="PF.producto=this.value;pfSug()" autocomplete="off">
+      <div id="pf-sug" class="chips-sm"></div></div>
     <div class="f2">
       <div class="frow"><label>Precio</label><input type="number" inputmode="decimal" step="any" placeholder="0" value="${PF.precio}" oninput="PF.precio=this.value" class="num" style="font-size:20px;font-weight:700"></div>
       <div class="frow"><label>Moneda</label><select onchange="PF.moneda=this.value">${CURS.map(c=>`<option ${PF.moneda===c?'selected':''}>${c}</option>`).join('')}</select></div>
@@ -972,7 +1013,7 @@ function tkCatId(key){
   return c.id}
 function tkNum(s){s=String(s).replace(/[$\s]/g,'');
   if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s))s=s.replace(/\./g,'').replace(',','.');
-  else if(/,\d{1,2}$/.test(s)&&!s.includes('.'))s=s.replace(',','.');
+  else if(/^\d+,\d+$/.test(s))s=s.replace(',','.');
   else s=s.replace(/,/g,'');
   const n=parseFloat(s);return n>0?n:null}
 function tkSize(s){const m=String(s).match(/([\d.,]+)\s*(kg|kilos?|g|grs?|gramos?|l|lt|litros?|ml|cc|un|u|unid\w*)\.?\s*$/i);
@@ -982,7 +1023,11 @@ function tkSize(s){const m=String(s).match(/([\d.,]+)\s*(kg|kilos?|g|grs?|gramos
   return {tamano:n,unidad:u}}
 function parseTicket(text){
   const items=[],bad=[];
-  String(text||'').split(/\n+/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
+  let txt=String(text||'');
+  // pegado sin saltos de línea (párrafo corrido): reconstruyo las líneas usando la categoría como cierre
+  if(txt.split(/\n/).filter(l=>l.trim()).length<=2&&(txt.match(/;/g)||[]).length>4){
+    txt=txt.replace(/;\s*(super|verduleria|verdulería|carniceria|carnicería)\b[.,]?\s*/gi,'; $1\n')}
+  txt.split(/\n+/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
     let l=line.replace(/^[-•*]\s*/,'').replace(/^\d+[.)]\s+/,'');
     const parts=l.split(/;|\t/).map(x=>x.trim());
     let name=null,price=null,sz=null,tag=null;
@@ -1001,8 +1046,9 @@ function openTicketForm(){
   const last=activePrecios().slice(-1)[0];
   TK={super:last?.super||'',moneda:'ARS',fecha:todayStr(),texto:'',aPrecios:true,aGasto:true,categoria:'cat_super'};
   drawTicketForm()}
+function tkPickSup(i){TK.super=window._supChips[i];drawTicketForm()}
 function drawTicketForm(){
-  const supers=[...new Set(activePrecios().map(p=>p.super))];
+  const supers=knownSupers();
   const {items,bad}=parseTicket(TK.texto);
   const total=items.reduce((a,x)=>a+x.precio,0);
   const cats=S.categorias.filter(c=>c.activa&&c.tipo==='gasto');
@@ -1012,16 +1058,16 @@ function drawTicketForm(){
     <div class="card" style="padding:12px 14px;margin-bottom:14px;font-size:13.5px;color:var(--tx2);line-height:1.55">
       📸 Sacale foto al ticket, pasásela a ChatGPT con el prompt de abajo, y pegá acá lo que te devuelva.
       <button class="btn ghost" style="margin-top:10px;min-height:44px;padding:10px" onclick="copyPrompt(this)">📋 Copiar prompt para ChatGPT</button></div>
-    <div class="f2">
-      <div class="frow"><label>Comercio</label><input list="dl-supers2" placeholder="Coto, Día…" value="${esc(TK.super)}" oninput="TK.super=this.value">
-        <datalist id="dl-supers2">${supers.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
-      <div class="frow"><label>Fecha</label><input type="date" value="${TK.fecha}" onchange="TK.fecha=this.value"></div></div>
+    <div class="frow"><label>Comercio</label>
+      ${supChips(supers,TK.super,'tkPickSup')}
+      <input placeholder="${supers.length?'¿Otro lugar? Escribilo acá':'Coto, Día…'}" value="${esc(supers.includes(TK.super)?'':TK.super)}" oninput="TK.super=this.value;const e=$('#tk-supname');if(e)e.textContent=this.value||'ese comercio'" style="margin-top:${supers.length?'8px':'0'}"></div>
+    <div class="frow"><label>Fecha</label><input type="date" value="${TK.fecha}" onchange="TK.fecha=this.value"></div>
     <div class="frow"><label>Productos <span class="opt">(uno por línea: producto; precio; tamaño)</span></label>
       <textarea id="tk-text" rows="6" placeholder="Leche entera; 1890; 1 L&#10;Café molido; 8900; 500 g&#10;Pan lactal; 2350" style="resize:vertical;min-height:120px;font-size:14px;line-height:1.5" oninput="TK.texto=this.value;updateTicketPreview()">${esc(TK.texto)}</textarea>
       <div id="tk-preview" class="hint" style="min-height:20px">${ticketPreviewHtml(items,bad,total)}</div></div>
     <div class="frow">
       <div class="toggle-row" onclick="TK.aPrecios=!TK.aPrecios;drawTicketForm()">
-        <div><span class="tr-l">🏷️ Guardar en comparador</span><span class="tr-s">Suma estos precios a la tabla de ${esc(TK.super)||'ese comercio'}</span></div>
+        <div><span class="tr-l">🏷️ Guardar en comparador</span><span class="tr-s">Suma estos precios a la tabla de <span id="tk-supname">${esc(TK.super)||'ese comercio'}</span></span></div>
         <span class="sw ${TK.aPrecios?'on':''}"></span></div></div>
     <div class="frow">
       <div class="toggle-row" onclick="TK.aGasto=!TK.aGasto;drawTicketForm()">
@@ -1105,8 +1151,9 @@ function rListas(){
         ${itemsDe(l.id).filter(i=>!i.checked).length?`<b>${itemsDe(l.id).filter(i=>!i.checked).length}</b>`:''}
         ${LV.lista===l.id?ICON.edit:''}</button>`).join('')}</div>
     <div class="add-item">
-      <input id="li-new" placeholder="Agregar… separá con comas para varios" enterkeyhint="done" onkeydown="if(event.key==='Enter')addItem()">
+      <input id="li-new" placeholder="Agregar… separá con comas para varios" enterkeyhint="done" autocomplete="off" oninput="liSug()" onkeydown="if(event.key==='Enter')addItem()">
       <button class="go" onclick="addItem()" aria-label="Agregar"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <div id="li-sug" class="chips-sm" style="margin:-6px 0 14px"></div>
     ${pend.length?`<div class="card" style="padding:6px 16px">${pend.map(row).join('')}</div>`:
       done.length?'':`<div class="empty"><span class="e-emo">📝</span><b>Lista vacía</b>Anotá lo que te falta comprar.<br>Tocás un ítem para tacharlo, y lo tachado se borra solo a las 12 horas.</div>`}
     ${done.length?`<div class="done-h"><span>✓ Comprado (${done.length})</span><button onclick="clearDone()">Limpiar ahora</button></div>
@@ -1114,6 +1161,23 @@ function rListas(){
       <div class="hint">Si tachaste algo por error, tocalo de nuevo y vuelve a pendientes.</div>`:''}`;
 }
 function tapLista(id){if(LV.lista===id)openListaForm(id);else{LV.lista=id;rListas()}}
+function liHistory(){const cnt={},disp={};
+  S.lista_items.forEach(i=>{const k=tkNorm(i.texto);if(!k)return;cnt[k]=(cnt[k]||0)+1;disp[k]=i.texto});
+  knownProds().forEach(p=>{const k=tkNorm(p);if(!(k in cnt)){cnt[k]=1;disp[k]=p}});
+  return Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).map(k=>disp[k])}
+function liSug(){const box=$('#li-sug');if(!box)return;
+  const raw=$('#li-new')?.value||'';
+  const q=tkNorm(raw.split(/[,;]/).pop());
+  if(q.length<2){box.innerHTML='';return}
+  const pend=new Set(itemsDe(LV.lista).filter(i=>!i.checked).map(i=>tkNorm(i.texto)));
+  const matches=liHistory().filter(p=>{const n=tkNorm(p);return n.includes(q)&&n!==q&&!pend.has(n)}).slice(0,6);
+  window._liMatch=matches;
+  box.innerHTML=matches.map((m,i)=>`<button class="fchip" onclick="liPick(${i})">＋ ${esc(m)}</button>`).join('')}
+function liPick(i){const m=window._liMatch[i];const inp=$('#li-new');
+  // reemplaza lo que venía tipeando (último tramo tras la coma) por la sugerencia y agrega
+  const parts=(inp.value||'').split(/[,;]/);parts.pop();
+  inp.value=[...parts,m].map(x=>x.trim()).filter(Boolean).join(', ');
+  addItem()}
 function addItem(){const inp=$('#li-new');const t=(inp?.value||'').trim();
   if(!t)return;if(!LV.lista)return toast('Creá una lista primero');
   const partes=t.split(/[,;]+/).map(x=>x.trim()).filter(Boolean);
