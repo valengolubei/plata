@@ -115,8 +115,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;padding
 .searchbar{position:relative;margin:var(--sp2) 0 var(--sp3)}
 .searchbar svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--tx3)}
 .searchbar input{padding-left:44px}
-.filters{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:none}
-.filters::-webkit-scrollbar{display:none}
+.filters{display:flex;flex-wrap:wrap;gap:8px;padding:2px 2px 6px}
 .fchip{flex:none;font-size:13.5px;font-weight:600;padding:9px 15px;min-height:40px;border-radius:99px;border:1.5px solid var(--line);color:var(--tx2);background:var(--s1);transition:.15s;display:flex;align-items:center;gap:5px}
 .fchip.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
 select.fchip{width:auto;padding-right:32px}
@@ -281,8 +280,7 @@ nav.bottom{position:fixed;bottom:0;left:0;right:0;z-index:60;max-width:640px;mar
 /* ============ LISTAS ============ */
 .nav-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:17px;height:17px;border-radius:9px;background:var(--acc);color:var(--on-acc);
   font-size:10.5px;font-weight:800;display:none;align-items:center;justify-content:center;padding:0 4px}
-.lst-tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;margin-bottom:var(--sp3);scrollbar-width:none}
-.lst-tabs::-webkit-scrollbar{display:none}
+.lst-tabs{display:flex;flex-wrap:wrap;gap:8px;padding:2px 2px 6px;margin-bottom:var(--sp3)}
 .add-item{display:flex;gap:8px;margin-bottom:var(--sp4)}
 .add-item input{flex:1}
 .add-item .go{width:52px;flex:none;border-radius:var(--r-sm);background:var(--acc);color:var(--on-acc);display:grid;place-items:center;min-height:48px}
@@ -430,11 +428,11 @@ function autopostFijos(){let n=0;const today=todayStr();
   for(const f of S.fijos){if(f.deleted||!f.activo)continue;
     let due=nextDue(f),guard=0;
     while(due<=today&&guard++<120){
-      const mov={id:uid('mov'),tipo:'gasto',fecha:due,cuenta:f.cuenta,moneda:f.moneda,monto:f.monto,
+      const mov={id:uid('mov'),tipo:f.tipo||'gasto',fecha:due,cuenta:f.cuenta,moneda:f.moneda,monto:f.monto,
         categoria:f.categoria,descripcion:f.nombre,fijo_id:f.id,auto:1,creado_en:Date.now()};
       S.movs.push(mov);touch('movs',mov);
       f.last_posted=due;touch('fijos',f);due=nextDue(f);n++}}
-  if(n)toast(n+(n>1?' gastos fijos registrados':' gasto fijo registrado')+' automáticamente');
+  if(n)toast(n+(n>1?' movimientos fijos registrados':' movimiento fijo registrado')+' automáticamente');
   return n}
 
 /* ---------- navegación ---------- */
@@ -572,12 +570,12 @@ function drawMovForm(focus){
       ${cross?`<div class="frow"><label>¿Cuánto llegó? (${cd.moneda})</label>
         <input type="number" inputmode="decimal" step="any" placeholder="0" value="${MF.monto_destino}" oninput="MF.monto_destino=this.value;liveTC()" style="font-size:22px;font-weight:700;text-align:center" class="num"></div>
       <div class="tc-note" id="tc-note">${tc?`💱 1 ${c.moneda} = ${fmt(tc,3)} ${cd.moneda}`:''}</div>`:''}`}
-  // — repetir (solo gastos)
-  const rep=t==='gasto'&&!MF._edit?`
+  // — repetir (gastos e ingresos)
+  const rep=(t==='gasto'||t==='ingreso')&&!MF._edit?`
     <div class="frow">
       <div class="toggle-row" onclick="MF.repite=!MF.repite;drawMovForm()">
         <div><span class="tr-l">${ICON.repeat} Se repite</span>
-        <span class="tr-s">Se registra solo cada período (alquiler, subs…)</span></div>
+        <span class="tr-s">${t==='ingreso'?'Se registra solo cada período (sueldo…)':'Se registra solo cada período (alquiler, subs…)'}</span></div>
         <span class="sw ${MF.repite?'on':''}"></span></div>
       ${MF.repite?`<div class="freq-chips">${Object.entries(FRECS).map(([k,v])=>
         `<button class="${MF.frecuencia===k?'on':''}" onclick="MF.frecuencia='${k}';drawMovForm()">${v}</button>`).join('')}</div>`:''}
@@ -628,12 +626,12 @@ function saveMov(){
     if(c.moneda===cd.moneda)MF.monto_destino=MF.monto;
     MF.tc=c.moneda!==cd.moneda?(+MF.monto_destino/+MF.monto).toFixed(4):'';MF.categoria=''}
   MF.moneda=c.moneda;
-  const repite=MF.repite&&MF.tipo==='gasto'&&!MF._edit;
+  const repite=MF.repite&&(MF.tipo==='gasto'||MF.tipo==='ingreso')&&!MF._edit;
   const{_edit,repite:_r,frecuencia,...clean}=MF;
   if(MF._edit){const i=S.movs.findIndex(x=>x.id===MF.id);S.movs[i]={...clean,frecuencia:undefined};touch('movs',S.movs[i])}
   else{clean.id=uid('mov');clean.creado_en=Date.now();
     if(repite){
-      const f={id:uid('fij'),nombre:MF.descripcion||cat(MF.categoria)?.nombre||'Gasto fijo',monto:+MF.monto,moneda:c.moneda,
+      const f={id:uid('fij'),tipo:MF.tipo,nombre:MF.descripcion||cat(MF.categoria)?.nombre||(MF.tipo==='ingreso'?'Ingreso fijo':'Gasto fijo'),monto:+MF.monto,moneda:c.moneda,
         cuenta:MF.cuenta,categoria:MF.categoria,frecuencia:MF.frecuencia,start_fecha:MF.fecha,last_posted:MF.fecha,activo:1};
       S.fijos.push(f);touch('fijos',f);clean.fijo_id=f.id}
     S.movs.push(clean);touch('movs',clean)}
@@ -813,14 +811,18 @@ function rPrecios(){
       const best=Math.min(...finite);
       const anyU=vals.find(p=>unitPrice(p));
       const name=vals[0]?.producto||pr;
+      // tamaño más frecuente del producto → va en la columna de producto
+      const szCount={};vals.forEach(p=>{const z=szLabel(p);if(z)szCount[z]=(szCount[z]||0)+1});
+      const mainSz=Object.entries(szCount).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
       const cells=supers.map(s=>{const p=cell[pr+'|'+s];if(!p)return'<td style="color:var(--tx3)">—</td>';
         const up=unitPrice(p);const v=PM.unit?up:+p.precio;
         if(PM.unit&&up==null)return'<td style="color:var(--tx3)" title="sin tamaño">?</td>';
         const isBest=v===best&&finite.length>1;
         const old=new Date(p.fecha).getTime()<cutoff;
-        const sz=!PM.unit&&p.tamano?`<span class="csz">${szLabel(p)}</span>`:'';
+        const z=szLabel(p);
+        const sz=!PM.unit&&z&&z!==mainSz?`<span class="csz">⚠ ${z}</span>`:'';
         return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v,PM.unit?2:null)}${sz}</td>`}).join('');
-      return `<tr><td>${esc(name)}${anyU&&PM.unit?`<small>${unitLabel(anyU.unidad)}</small>`:''}</td>${cells}</tr>`}).join('');
+      return `<tr><td>${esc(name)}<small>${PM.unit?(anyU?unitLabel(anyU.unidad):''):mainSz}</small></td>${cells}</tr>`}).join('');
     table=`<div class="pt-scroll"><table class="price-table">
       <thead><tr><th>Producto</th>${supers.map(s=>`<th title="${esc(s)}">${esc(abrev(s))}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody></table></div>
@@ -968,8 +970,8 @@ function rFijos(){
         <div class="nf-emo">${c?.emoji||'🔁'}</div>
         <div class="nf-body" onclick="openFijoForm('${f.id}')" style="cursor:pointer">
           <div class="nf-n">${esc(f.nombre)}</div>
-          <div class="nf-s">${FRECS[f.frecuencia||'mensual']} · ${f.activo?'próximo: '+fmtDay(f.due):'pausado'}</div></div>
-        <div class="nf-amt num">${fmt(+f.monto)}<small>${f.moneda}</small></div>
+          <div class="nf-s">${f.tipo==='ingreso'?'💰 Ingreso · ':''}${FRECS[f.frecuencia||'mensual']} · ${f.activo?'próximo: '+fmtDay(f.due):'pausado'}</div></div>
+        <div class="nf-amt num" style="${f.tipo==='ingreso'?'color:var(--acc)':''}">${f.tipo==='ingreso'?'+':''}${fmt(+f.monto)}<small>${f.moneda}</small></div>
         <button class="sw ${f.activo?'on':''}" onclick="toggleFijo('${f.id}')" aria-label="${f.activo?'Pausar':'Activar'}"></button></div>`}).join('')}</div>`:
     `<div class="empty"><span class="e-emo">🔁</span><b>Sin recurrentes aún</b>La forma más fácil: cargá un gasto con el + y activá <b>"Se repite"</b>.<br>O crealo directo acá abajo.</div>`}
     <button class="btn-add" onclick="openFijoForm()">＋ Crear recurrente</button>`;
@@ -978,27 +980,30 @@ function toggleFijo(id){const f=S.fijos.find(x=>x.id===id);f.activo=f.activo?0:1
   if(f.activo&&!f.last_posted)f.last_posted=todayStr();
   touch('fijos',f);rFijos();toast(f.activo?'Activado — se registra solo 🔁':'Pausado')}
 let FF={};
-function openFijoForm(id){
+function openFijoForm(id,keep){
   const f=id?S.fijos.find(x=>x.id===id):null;
-  FF=f?{...f}:{nombre:'',monto:'',cuenta:S.cuentas.find(c=>c.activa)?.id,categoria:'cat_serv',frecuencia:'mensual',start_fecha:todayStr(),activo:1};
+  FF=keep?keep:(f?{tipo:'gasto',...f}:{tipo:'gasto',nombre:'',monto:'',cuenta:S.cuentas.find(c=>c.activa)?.id,categoria:'cat_serv',frecuencia:'mensual',start_fecha:todayStr(),activo:1});
   FF._edit=!!f;
-  const ctas=S.cuentas.filter(c=>c.activa);const cats=S.categorias.filter(c=>c.activa&&c.tipo==='gasto');
+  const esIn=FF.tipo==='ingreso';
+  const ctas=S.cuentas.filter(c=>c.activa);const cats=S.categorias.filter(c=>c.activa&&c.tipo===(esIn?'ingreso':'gasto'));
+  if(!cats.some(c=>c.id===FF.categoria))FF.categoria=cats[0]?.id||'';
   openSheet(`
     <div class="grip"></div><h3>${FF._edit?'Editar recurrente':'Nuevo recurrente'}
       <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
-    <div class="frow"><label>Nombre</label><input placeholder="Alquiler, Internet, Netflix…" value="${esc(FF.nombre)}" oninput="FF.nombre=this.value"></div>
+    <div class="frow"><div class="seg" style="--sc:${esIn?'var(--acc)':'var(--tx)'}">
+      <button class="${!esIn?'on':''}" onclick="FF.tipo='gasto';openFijoForm(FF._edit?FF.id:null,{...FF,tipo:'gasto'})">💸 Gasto</button>
+      <button class="${esIn?'on':''}" onclick="FF.tipo='ingreso';openFijoForm(FF._edit?FF.id:null,{...FF,tipo:'ingreso'})">💰 Ingreso</button></div></div>
+    <div class="frow"><label>Nombre</label><input placeholder="${esIn?'Sueldo, alquiler que cobro…':'Alquiler, Internet, Netflix…'}" value="${esc(FF.nombre)}" oninput="FF.nombre=this.value"></div>
     <div class="f2">
       <div class="frow"><label>Monto</label><input type="number" inputmode="decimal" step="any" value="${FF.monto}" oninput="FF.monto=this.value" class="num" style="font-size:20px;font-weight:700"></div>
       <div class="frow"><label>Moneda</label><select onchange="FF.cuenta=this.value">${ctas.map(x=>`<option value="${x.id}" ${FF.cuenta===x.id?'selected':''}>${x.moneda}${ctas.length>3?' · '+esc(x.nombre):''}</option>`).join('')}</select></div></div>
     <div class="frow"><label>Frecuencia</label><div class="freq-chips" style="margin:0">${Object.entries(FRECS).map(([k,v])=>
-      `<button class="${FF.frecuencia===k?'on':''}" onclick="FF.frecuencia='${k}';openFijoRedraw()">${v}</button>`).join('')}</div></div>
+      `<button class="${FF.frecuencia===k?'on':''}" onclick="FF.frecuencia='${k}';openFijoForm(FF._edit?FF.id:null,{...FF,frecuencia:'${k}'})">${v}</button>`).join('')}</div></div>
     <div class="f2">
       <div class="frow"><label>Categoría</label><select onchange="FF.categoria=this.value">${cats.map(x=>`<option value="${x.id}" ${FF.categoria===x.id?'selected':''}>${x.emoji} ${esc(x.nombre)}</option>`).join('')}</select></div>
-      <div class="frow"><label>Empieza / se paga el</label><input type="date" value="${FF.start_fecha}" onchange="FF.start_fecha=this.value;FF.last_posted=''"></div></div>
+      <div class="frow"><label>Empieza / ${esIn?'se cobra':'se paga'} el</label><input type="date" value="${FF.start_fecha}" onchange="FF.start_fecha=this.value;FF.last_posted=''"></div></div>
     <button class="btn" onclick="saveFijo()">${ICON.check} Guardar</button>
     ${FF._edit?`<button class="btn danger" onclick="delFijo('${FF.id}')">Eliminar recurrente</button>`:''}`)}
-function openFijoRedraw(){const id=FF._edit?FF.id:null;const keep={...FF};openFijoForm(id);FF={...keep};
-  $$('.freq-chips button').forEach(b=>b.classList.toggle('on',b.textContent===FRECS[FF.frecuencia]))}
 function saveFijo(){
   if(!FF.nombre.trim())return toast('Falta el nombre');
   if(!(+FF.monto>0))return toast('Falta el monto');
