@@ -1,4 +1,4 @@
-# 💚 PLATA
+# 💚 teka $
 
 App personal de gastos en dos monedas (UYU · ARS · USD), con comparador de precios de supermercados.
 

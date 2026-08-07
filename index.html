@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0B0D10">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>PLATA — gastos UY·AR</title>
+<title>teka $ — gastos UY·AR</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -306,7 +306,7 @@ svg text{font-family:var(--sans);font-weight:600}
 <body>
 <div id="app">
   <header class="top">
-    <div class="brand"><span class="logo">$</span>PLATA</div>
+    <div class="brand"><span class="logo">$</span>teka</div>
     <button class="hbtn" id="btn-ajustes" aria-label="Ajustes">
       <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span class="sync-dot" id="sync-dot"></span>
@@ -1120,14 +1120,14 @@ function delPres(id){const p=S.presupuestos.find(x=>x.id===id);p.deleted=1;touch
 /* ---------- export / import ---------- */
 function dl(name,content,type){const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5e3)}
-function exportJSON(){dl('plata-respaldo-'+todayStr()+'.json',JSON.stringify(S,null,1),'application/json');toast('Respaldo descargado ✓')}
+function exportJSON(){dl('teka-respaldo-'+todayStr()+'.json',JSON.stringify(S,null,1),'application/json');toast('Respaldo descargado ✓')}
 function exportCSV(){
   const head='fecha,tipo,moneda,monto,categoria,descripcion,medio_pago,moneda_destino,monto_destino,tc';
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
   const rows=activeMovs().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(m=>
     [m.fecha,m.tipo,m.moneda,m.monto,cat(m.categoria)?.nombre||'',m.descripcion||'',m.medio_pago||'',
      cta(m.cuenta_destino)?.moneda||'',m.monto_destino||'',m.tc||''].map(q).join(','));
-  dl('plata-movimientos-'+todayStr()+'.csv','﻿'+head+'\n'+rows.join('\n'),'text/csv');toast('CSV descargado ✓')}
+  dl('teka-movimientos-'+todayStr()+'.csv','﻿'+head+'\n'+rows.join('\n'),'text/csv');toast('CSV descargado ✓')}
 function importJSON(inp){const f=inp.files[0];if(!f)return;
   const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);
     if(!d.movs||!d.cuentas)throw 0;
