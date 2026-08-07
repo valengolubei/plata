@@ -188,6 +188,24 @@ select.mtab{width:auto;flex:none;padding-right:34px}
 .price-table tr.msel td{background:var(--acc-dim)!important}
 .price-table .mchk{color:var(--acc);font-size:15px;margin-right:2px}
 .price-table tr[onclick]{cursor:pointer}
+.pcard{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;transition:border-color .15s}
+.pcard+.pcard{margin-top:10px}
+.pcard.on{border-color:var(--acc);background:var(--acc-dim)}
+.pc-h{font-size:14.5px;margin-bottom:9px;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.pc-h small{color:var(--tx3);font-size:12px;font-weight:700}
+.pc-prices{display:flex;flex-wrap:wrap;gap:7px}
+.pchip{display:flex;flex-direction:column;align-items:flex-start;gap:0;border:1.5px solid var(--line);border-radius:12px;padding:7px 12px;min-width:88px;min-height:48px;background:var(--s2);text-align:left;transition:.13s}
+.pchip:active{transform:scale(.96)}
+.pchip .pc-s{font-size:11px;font-weight:700;color:var(--tx3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip .pc-v{font-size:15px;font-weight:800;line-height:1.3}
+.pchip .pc-d{font-size:10.5px;font-weight:700;color:var(--tx3)}
+.pchip.best{border-color:rgba(61,220,151,.5);background:var(--acc-dim)}
+.pchip.best .pc-v,.pchip.best .pc-d{color:var(--acc)}
+.pchip.stale{opacity:.5}
+.pw{color:var(--warn)}
+.merge-bar{position:fixed;left:16px;right:16px;bottom:calc(96px + var(--safe-b));z-index:55;max-width:608px;margin:0 auto}
+.merge-bar .btn{box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.btn[disabled]{opacity:.5;background:var(--s3);color:var(--tx2)}
 .chips-sm{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .chips-sm:empty{display:none}
 .chips-sm .fchip{min-height:38px;padding:7px 13px;font-size:13px}
@@ -811,7 +829,7 @@ function superRanking(cell,prods,supers){
     .sort((a,b)=>a.pct-b.pct);
   return scored.length>=2?{scored,nProds}:null}
 const pKey=p=>tkNorm(typeof p==='string'?p:p.producto).replace(/\s+/g,' ').trim();
-let PMM={on:false,sel:new Set()};
+let PMM={on:false,sel:new Set()},PRQ='',PRQf=0;
 function rPrecios(){
   const ps=activePrecios();
   const supers=[...new Set(ps.map(p=>p.super))].sort();
@@ -832,41 +850,44 @@ function rPrecios(){
           <span class="r-v num">${i===0?'el más barato':'+'+x.pct.toFixed(0)+'% más caro'}</span></div>`).join('')}
         <div class="hint">Comparando los ${rank.nProds} productos que cargaste en más de un comercio. Cuantos más precios anotes, más preciso.</div></div>`}
     const cutoff=Date.now()-45*864e5;
-    const abrev=s=>s.length>9?s.slice(0,8)+'…':s;
-    const rows=prods.map((pr,pi)=>{
-      const vals=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
-      const nums=vals.map(p=>+p.precio);
-      const best=Math.min(...nums);
-      const name=vals[vals.length-1]?.producto||pr;
-      // tamaño más frecuente del producto → va en la columna de producto
-      const szCount={};vals.forEach(p=>{const z=szLabel(p);if(z)szCount[z]=(szCount[z]||0)+1});
+    let list=prods;
+    if(PRQ.trim()){const q=tkNorm(PRQ);list=prods.filter(pr=>pr.includes(q))}
+    const cards=list.map(pr=>{
+      const idx=prods.indexOf(pr);
+      const entries=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
+      const best=Math.min(...entries.map(p=>+p.precio));
+      const name=entries[entries.length-1]?.producto||pr;
+      const szCount={};entries.forEach(p=>{const z=szLabel(p);if(z)szCount[z]=(szCount[z]||0)+1});
       const mainSz=Object.entries(szCount).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
-      const sel=PMM.on&&PMM.sel.has(pi);
-      const cells=supers.map(s=>{const p=cell[pr+'|'+s];if(!p)return'<td style="color:var(--tx3)">—</td>';
-        const v=+p.precio;
-        const isBest=v===best&&nums.length>1;
+      const sel=PMM.on&&PMM.sel.has(idx);
+      const chips=entries.slice().sort((a,b)=>a.precio-b.precio).map(p=>{
+        const v=+p.precio;const isBest=v===best&&entries.length>1;
         const old=new Date(p.fecha).getTime()<cutoff;
-        const z=szLabel(p);
-        const sz=z&&z!==mainSz?`<span class="csz">⚠ ${z}</span>`:'';
-        return `<td class="${isBest?'best':old?'stale':''}" ${PMM.on?'':`onclick="openPrecioForm('${p.id}')"`}>${fmt(v)}${sz}</td>`}).join('');
-      return `<tr class="${sel?'msel':''}" ${PMM.on?`onclick="togglePMM(${pi})"`:''}>
-        <td>${PMM.on?`<span class="mchk">${sel?'☑':'☐'}</span> `:''}${esc(name)}<small>${mainSz}</small></td>${cells}</tr>`}).join('');
-    table=`<div class="pt-scroll"><table class="price-table">
-      <thead><tr><th>Producto</th>${supers.map(s=>`<th title="${esc(s)}">${esc(abrev(s))}</th>`).join('')}</tr></thead>
-      <tbody>${rows}</tbody></table></div>
+        const pct=!isBest&&best>0?Math.round((v/best-1)*100):0;
+        const z=szLabel(p);const warn=z&&z!==mainSz?` <span class="pw">⚠${z}</span>`:'';
+        return `<button class="pchip ${isBest?'best':''} ${old?'stale':''}" ${PMM.on?'tabindex="-1"':`onclick="event.stopPropagation();openPrecioForm('${p.id}')"`}>
+          <span class="pc-s">${esc(p.super)}</span><span class="pc-v num">${fmt(v)}</span>
+          <span class="pc-d">${isBest?'● mejor':entries.length>1?'+'+pct+'%':''}${warn}</span></button>`}).join('');
+      return `<div class="pcard ${sel?'on':''}" ${PMM.on?`onclick="togglePMM(${idx})"`:''}>
+        <div class="pc-h">${PMM.on?`<span class="mchk">${sel?'☑':'☐'}</span>`:''}<b>${esc(name)}</b>${mainSz?`<small>${mainSz}</small>`:''}</div>
+        <div class="pc-prices">${chips}</div></div>`}).join('');
+    table=`<div class="searchbar" style="margin:0 0 12px">${ICON.search}<input id="pr-q" placeholder="Filtrar producto…" value="${esc(PRQ)}" oninput="PRQ=this.value;PRQf=1;rPrecios()" aria-label="Filtrar productos"></div>
+      ${cards||`<div class="hint">Ningún producto coincide con "${esc(PRQ)}".</div>`}
       ${PMM.on?
-        `<button class="btn" style="margin-top:14px" onclick="doMergeOpen()" ${PMM.sel.size<2?'disabled style="margin-top:14px;opacity:.4"':''}>🔀 Fusionar ${PMM.sel.size||''} seleccionados</button>
-         <div class="hint">Tocá las filas que son el mismo producto y después "Fusionar".</div>`:
-        `<div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · deslizá la tabla para ver más comercios · tocá un precio para corregirlo</div>`}`}
+        `<div class="hint">Tocá las tarjetas que son el mismo producto — el botón para fusionar está abajo, fijo.</div><div style="height:88px"></div>`:
+        `<div class="hint" style="margin-top:12px"><span class="g">● verde</span> = el más barato, ordenados de menor a mayor · gris = precio viejo (+45 días) · tocá un precio para corregirlo</div>`}`}
   $('#view-precios').innerHTML=`
     <div class="sec-h"><h2>¿Dónde conviene comprar?</h2>
       ${prods.length>1?`<button class="sec-link" onclick="togglePMMode()" style="${PMM.on?'color:var(--danger)':''}">${PMM.on?'✕ Cancelar':'🔀 Fusionar'}</button>`:''}</div>
     <div style="display:flex;gap:10px;margin-bottom:18px">
       <button class="btn" style="flex:1" onclick="openPrecioForm()">🏷️ Un precio</button>
       <button class="btn ghost" style="flex:1;margin:0" onclick="openTicketForm()">🧾 Cargar ticket</button></div>
-    ${rankCard}
+    ${PMM.on?`<div class="merge-bar"><button class="btn" onclick="doMergeOpen()" ${PMM.sel.size<2?'disabled':''}>
+      ${PMM.sel.size<2?'Seleccioná las filas que son lo mismo…':'🔀 Fusionar '+PMM.sel.size+' seleccionados'}</button></div>`:''}
+    ${rankCard&&!PMM.on?rankCard:''}
     ${table?`<div class="sec-h"><h2>Producto por producto</h2></div>${table}
-      <button class="btn-add" onclick="openCargas()">🗑 Deshacer una carga (ticket equivocado)</button>`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
+      ${PMM.on?'':`<button class="btn-add" onclick="openCargas()">🗑 Deshacer una carga (ticket equivocado)</button>`}`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
+  if(PRQf){const el=$('#pr-q');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}PRQf=0}
 }
 function openCargas(){
   const groups={};
