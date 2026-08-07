@@ -174,9 +174,18 @@ select.mtab{width:auto;flex:none;padding-right:34px}
 .price-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px}
 .price-table th{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3);font-weight:800;text-align:right;padding:10px 8px;border-bottom:1.5px solid var(--line2);white-space:nowrap}
 .price-table th:first-child{text-align:left}
-.price-table td{padding:12px 8px;border-bottom:1px solid var(--line);text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
-.price-table td:first-child{text-align:left;max-width:118px;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.price-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;vertical-align:top}
+.price-table td:first-child{text-align:left;max-width:104px;overflow:hidden;text-overflow:ellipsis;font-weight:700}
 .price-table td:first-child small{display:block;color:var(--tx3);font-size:11px;font-weight:600}
+.price-table th:first-child,.price-table td:first-child{position:sticky;left:0;background:var(--bg);z-index:2;
+  box-shadow:6px 0 8px -6px rgba(0,0,0,.55)}
+.price-table td .csz{display:block;font-size:10px;color:var(--tx3);font-weight:700;margin-top:1px}
+.rank-row{display:flex;align-items:center;gap:11px;padding:10px 0;font-size:14px}
+.rank-row+.rank-row{border-top:1px solid var(--line)}
+.rank-row .r-n{width:96px;flex:none;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-row .bar{flex:1}
+.rank-row .r-v{width:104px;text-align:right;font-size:12.5px;font-weight:700;flex:none;color:var(--tx2)}
+.rank-row.best .r-v{color:var(--acc)}
 .price-table td.best{color:var(--acc);font-weight:800;position:relative}
 .price-table td.best::after{content:'●';font-size:6px;position:absolute;top:8px;right:2px;color:var(--acc)}
 .price-table td.stale{color:var(--tx3);font-weight:500}
@@ -759,14 +768,44 @@ function unitPrice(p){if(!p.tamano||!(+p.tamano>0))return null;
   const factor=(u==='g'||u==='ml')?1000/t:1/t;
   return +p.precio*factor}
 function unitLabel(u){return u==='g'||u==='kg'?'por kg':u==='ml'||u==='L'?'por litro':'por unidad'}
+function szLabel(p){if(!p.tamano||!(+p.tamano>0))return'';
+  const u=p.unidad==='un'?(+p.tamano>1?' un':' un'):' '+p.unidad;
+  return fmt(+p.tamano)+u}
+function superRanking(cell,prods,supers){
+  // comparo solo productos cargados en 2+ comercios; base: precio por unidad si todos lo tienen, si no precio directo
+  const ratios={};let nProds=0;
+  for(const pr of prods){
+    const entries=supers.map(s=>({s,p:cell[pr+'|'+s]})).filter(e=>e.p);
+    if(entries.length<2)continue;
+    const allU=entries.every(e=>unitPrice(e.p)!=null);
+    const vals=entries.map(e=>({s:e.s,v:allU?unitPrice(e.p):+e.p.precio}));
+    const min=Math.min(...vals.map(x=>x.v));if(!(min>0))continue;
+    nProds++;
+    vals.forEach(x=>{(ratios[x.s]=ratios[x.s]||[]).push(x.v/min)})}
+  const scored=Object.entries(ratios).filter(([,r])=>r.length>=2)
+    .map(([s,r])=>({s,n:r.length,pct:(r.reduce((a,b)=>a+b,0)/r.length-1)*100}))
+    .sort((a,b)=>a.pct-b.pct);
+  return scored.length>=2?{scored,nProds}:null}
 function rPrecios(){
   const ps=activePrecios();
   const supers=[...new Set(ps.map(p=>p.super))].sort();
   const prods=[...new Set(ps.map(p=>p.producto.toLowerCase().trim()))].sort();
   const cell={};for(const p of ps.sort((a,b)=>a.fecha.localeCompare(b.fecha)))cell[p.producto.toLowerCase().trim()+'|'+p.super]=p;
-  let table='';
+  let table='',rankCard='';
   if(prods.length){
+    // índice general de comercios
+    const rank=superRanking(cell,prods,supers);
+    if(rank){
+      const worst=Math.max(...rank.scored.map(x=>x.pct),1);
+      rankCard=`<div class="sec-h"><h2>¿Cuál es más barato en general?</h2></div>
+      <div class="card">${rank.scored.map((x,i)=>`
+        <div class="rank-row ${i===0?'best':''}">
+          <span class="r-n">${i===0?'🏆 ':''}${esc(x.s)}</span>
+          <div class="bar"><i style="width:${8+x.pct/worst*92}%;--bc:${i===0?'var(--acc)':x.pct>15?'var(--danger)':'var(--warn)'}"></i></div>
+          <span class="r-v num">${i===0?'el más barato':'+'+x.pct.toFixed(0)+'% más caro'}</span></div>`).join('')}
+        <div class="hint">Comparando los ${rank.nProds} productos que cargaste en más de un comercio. Cuantos más precios anotes, más preciso.</div></div>`}
     const cutoff=Date.now()-45*864e5;
+    const abrev=s=>s.length>9?s.slice(0,8)+'…':s;
     const rows=prods.map(pr=>{
       const vals=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
       const nums=vals.map(p=>PM.unit?(unitPrice(p)??Infinity):+p.precio);
@@ -779,12 +818,13 @@ function rPrecios(){
         if(PM.unit&&up==null)return'<td style="color:var(--tx3)" title="sin tamaño">?</td>';
         const isBest=v===best&&finite.length>1;
         const old=new Date(p.fecha).getTime()<cutoff;
-        return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v,PM.unit?2:null)}</td>`}).join('');
+        const sz=!PM.unit&&p.tamano?`<span class="csz">${szLabel(p)}</span>`:'';
+        return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v,PM.unit?2:null)}${sz}</td>`}).join('');
       return `<tr><td>${esc(name)}${anyU&&PM.unit?`<small>${unitLabel(anyU.unidad)}</small>`:''}</td>${cells}</tr>`}).join('');
     table=`<div class="pt-scroll"><table class="price-table">
-      <thead><tr><th>Producto</th>${supers.map(s=>`<th>${esc(s)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Producto</th>${supers.map(s=>`<th title="${esc(s)}">${esc(abrev(s))}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody></table></div>
-      <div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · tocá un precio para corregirlo</div>`}
+      <div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · deslizá la tabla para ver más comercios · tocá un precio para corregirlo</div>`}
   $('#view-precios').innerHTML=`
     <div class="sec-h"><h2>¿Dónde conviene comprar?</h2></div>
     <div class="mtabs" style="margin-top:0">
@@ -792,7 +832,8 @@ function rPrecios(){
       <button class="mtab ${PM.unit?'on':''}" onclick="PM.unit=true;rPrecios()">Por kg / litro</button>
     </div>
     <button class="btn" style="margin-bottom:18px" onclick="openPrecioForm()">🏷️ Anotar un precio</button>
-    ${table||`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
+    ${rankCard}
+    ${table?`<div class="sec-h"><h2>Producto por producto</h2></div>${table}`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
 }
 let PF={};
 function openPrecioForm(id){
@@ -865,11 +906,11 @@ function rListas(){
   $('#view-listas').innerHTML=`
     <div class="sec-h"><h2>Listas</h2><button class="sec-link" onclick="openListaForm()">＋ Nueva lista</button></div>
     <div class="lst-tabs">${listas.map(l=>
-      `<button class="fchip ${LV.lista===l.id?'on':''}" onclick="LV.lista='${l.id}';rListas()">${l.emoji||'📋'} ${esc(l.nombre)}
-        ${itemsDe(l.id).filter(i=>!i.checked).length?`<b>${itemsDe(l.id).filter(i=>!i.checked).length}</b>`:''}</button>`).join('')}
-      ${listas.length?`<button class="fchip" onclick="openListaForm('${LV.lista}')" aria-label="Editar lista">${ICON.edit}</button>`:''}</div>
+      `<button class="fchip ${LV.lista===l.id?'on':''}" onclick="tapLista('${l.id}')" aria-label="${LV.lista===l.id?'Editar '+esc(l.nombre):esc(l.nombre)}">${l.emoji||'📋'} ${esc(l.nombre)}
+        ${itemsDe(l.id).filter(i=>!i.checked).length?`<b>${itemsDe(l.id).filter(i=>!i.checked).length}</b>`:''}
+        ${LV.lista===l.id?ICON.edit:''}</button>`).join('')}</div>
     <div class="add-item">
-      <input id="li-new" placeholder="Agregar… (ej: yerba, papel higiénico)" enterkeyhint="done" onkeydown="if(event.key==='Enter')addItem()">
+      <input id="li-new" placeholder="Agregar… separá con comas para varios" enterkeyhint="done" onkeydown="if(event.key==='Enter')addItem()">
       <button class="go" onclick="addItem()" aria-label="Agregar"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
     ${pend.length?`<div class="card" style="padding:6px 16px">${pend.map(row).join('')}</div>`:
       done.length?'':`<div class="empty"><span class="e-emo">📝</span><b>Lista vacía</b>Anotá lo que te falta comprar.<br>Tocás un ítem para tacharlo, y lo tachado se borra solo a las 12 horas.</div>`}
@@ -877,10 +918,15 @@ function rListas(){
       <div class="card" style="padding:6px 16px;opacity:.75">${done.map(row).join('')}</div>
       <div class="hint">Si tachaste algo por error, tocalo de nuevo y vuelve a pendientes.</div>`:''}`;
 }
+function tapLista(id){if(LV.lista===id)openListaForm(id);else{LV.lista=id;rListas()}}
 function addItem(){const inp=$('#li-new');const t=(inp?.value||'').trim();
   if(!t)return;if(!LV.lista)return toast('Creá una lista primero');
-  const i={id:uid('li'),lista:LV.lista,texto:t,checked:0,creado_en:Date.now()};
-  S.lista_items.push(i);touch('lista_items',i);inp.value='';rListas();$('#li-new')?.focus()}
+  const partes=t.split(/[,;]+/).map(x=>x.trim()).filter(Boolean);
+  partes.forEach((p,ix)=>{
+    const i={id:uid('li'),lista:LV.lista,texto:p,checked:0,creado_en:Date.now()+ix};
+    S.lista_items.push(i);touch('lista_items',i)});
+  inp.value='';rListas();$('#li-new')?.focus();
+  if(partes.length>1)toast(partes.length+' ítems agregados ✓')}
 function toggleItem(id){const i=S.lista_items.find(x=>x.id===id);if(!i)return;
   i.checked=i.checked?0:1;i.checked_at=i.checked?Date.now():null;
   touch('lista_items',i);rListas()}
