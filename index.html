@@ -759,7 +759,6 @@ function drawLine(pts){
 /* =====================================================
    PRECIOS
 ===================================================== */
-let PM={unit:false};
 function activePrecios(){return S.precios.filter(p=>!p.deleted)}
 function unitPrice(p){if(!p.tamano||!(+p.tamano>0))return null;
   const t=+p.tamano;const u=p.unidad||'un';
@@ -806,34 +805,29 @@ function rPrecios(){
     const abrev=s=>s.length>9?s.slice(0,8)+'…':s;
     const rows=prods.map(pr=>{
       const vals=supers.map(s=>cell[pr+'|'+s]).filter(Boolean);
-      const nums=vals.map(p=>PM.unit?(unitPrice(p)??Infinity):+p.precio);
-      const finite=nums.filter(n=>n<Infinity);
-      const best=Math.min(...finite);
-      const anyU=vals.find(p=>unitPrice(p));
+      const nums=vals.map(p=>+p.precio);
+      const best=Math.min(...nums);
       const name=vals[0]?.producto||pr;
       // tamaño más frecuente del producto → va en la columna de producto
       const szCount={};vals.forEach(p=>{const z=szLabel(p);if(z)szCount[z]=(szCount[z]||0)+1});
       const mainSz=Object.entries(szCount).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
       const cells=supers.map(s=>{const p=cell[pr+'|'+s];if(!p)return'<td style="color:var(--tx3)">—</td>';
-        const up=unitPrice(p);const v=PM.unit?up:+p.precio;
-        if(PM.unit&&up==null)return'<td style="color:var(--tx3)" title="sin tamaño">?</td>';
-        const isBest=v===best&&finite.length>1;
+        const v=+p.precio;
+        const isBest=v===best&&nums.length>1;
         const old=new Date(p.fecha).getTime()<cutoff;
         const z=szLabel(p);
-        const sz=!PM.unit&&z&&z!==mainSz?`<span class="csz">⚠ ${z}</span>`:'';
-        return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v,PM.unit?2:null)}${sz}</td>`}).join('');
-      return `<tr><td>${esc(name)}<small>${PM.unit?(anyU?unitLabel(anyU.unidad):''):mainSz}</small></td>${cells}</tr>`}).join('');
+        const sz=z&&z!==mainSz?`<span class="csz">⚠ ${z}</span>`:'';
+        return `<td class="${isBest?'best':old?'stale':''}" onclick="openPrecioForm('${p.id}')">${fmt(v)}${sz}</td>`}).join('');
+      return `<tr><td>${esc(name)}<small>${mainSz}</small></td>${cells}</tr>`}).join('');
     table=`<div class="pt-scroll"><table class="price-table">
       <thead><tr><th>Producto</th>${supers.map(s=>`<th title="${esc(s)}">${esc(abrev(s))}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody></table></div>
       <div class="hint"><span class="g">● verde</span> = el más barato · gris = precio viejo (+45 días) · deslizá la tabla para ver más comercios · tocá un precio para corregirlo</div>`}
   $('#view-precios').innerHTML=`
     <div class="sec-h"><h2>¿Dónde conviene comprar?</h2></div>
-    <div class="mtabs" style="margin-top:0">
-      <button class="mtab ${!PM.unit?'on':''}" onclick="PM.unit=false;rPrecios()">Precio</button>
-      <button class="mtab ${PM.unit?'on':''}" onclick="PM.unit=true;rPrecios()">Por kg / litro</button>
-    </div>
-    <button class="btn" style="margin-bottom:18px" onclick="openPrecioForm()">🏷️ Anotar un precio</button>
+    <div style="display:flex;gap:10px;margin-bottom:18px">
+      <button class="btn" style="flex:1" onclick="openPrecioForm()">🏷️ Un precio</button>
+      <button class="btn ghost" style="flex:1;margin:0" onclick="openTicketForm()">🧾 Cargar ticket</button></div>
     ${rankCard}
     ${table?`<div class="sec-h"><h2>Producto por producto</h2></div>${table}`:`<div class="empty"><span class="e-emo">🛒</span><b>Comparador de súpers</b>Anotá lo que sale un producto en cada súper y acá se arma sola la tabla comparativa.<br><br>Si ponés el tamaño (900 g, 1 L…) también compara el precio por kilo o litro — la única comparación justa.</div>`}`;
 }
@@ -877,6 +871,147 @@ function savePrecio(){
   closeSheet();rPrecios();toast('Precio anotado ✓')}
 function delPrecio(id){const p=S.precios.find(x=>x.id===id);if(!confirm('¿Eliminar este precio?'))return;
   p.deleted=1;touch('precios',p);closeSheet();rPrecios();toast('Eliminado')}
+
+/* =====================================================
+   CARGA MASIVA (ticket)
+===================================================== */
+const CHATGPT_PROMPT=`Transcribí este ticket de supermercado a texto plano, una línea por producto, con este formato exacto:
+
+producto; precio; tamaño; categoria
+
+Reglas:
+- precio: solo el número, sin símbolo de moneda
+- tamaño: opcional, solo si figura (ej: 500 g, 1 L, 6 un); si no figura dejá el campo vacío pero mantené los punto y coma
+- categoria: clasificá cada producto en una de estas tres, escribila exactamente así:
+  · verduleria = frutas y verduras frescas
+  · carniceria = carnes de todo tipo: vacuna, pollo, cerdo, pescado, embutidos frescos
+  · super = TODO lo demás (almacén, lácteos, limpieza, bebidas, fiambres, congelados, etc.)
+- si compré 2 o más unidades iguales, poné el precio total de la línea
+- no agregues encabezados, totales, ni ningún otro texto
+
+Ejemplo:
+Leche entera; 1890; 1 L; super
+Tomate perita; 2400; 1 kg; verduleria
+Pechuga de pollo; 7800; ; carniceria
+Pan lactal; 2350; ; super`;
+const TK_VERDU='manzana banana naranja limon tomate papa cebolla zanahoria lechuga acelga espinaca zapallo zapallito morron pera uva frutilla palta kiwi mandarina brocoli coliflor apio choclo pepino berenjena zucchini verdeo ajo batata rucula perejil ciruela durazno sandia melon anana pomelo remolacha puerro repollo chaucha rabanito hinojo albahaca cilantro'.split(' ');
+const TK_CARNE='carne pollo cerdo nalga lomo asado vacio matambre picada molida bondiola costilla costeleta chorizo salchicha parrillera morcilla milanesa suprema pechuga muslo pata higado rinon mondongo pescado merluza atun fresco salmon camaron bife cuadril entrana falda osobuco paleta roastbeef peceto colita'.split(' ');
+function tkNorm(s){return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
+function tkCat(nombre,tag){
+  if(tag){const t=tkNorm(tag);
+    if(t.startsWith('verdu'))return'verduleria';
+    if(t.startsWith('carn'))return'carniceria';
+    if(t)return'super'}
+  const n=' '+tkNorm(nombre)+' ';
+  if(TK_CARNE.some(w=>n.includes(w)))return'carniceria';
+  if(TK_VERDU.some(w=>n.includes(w)))return'verduleria';
+  return'super'}
+const TK_CAT_DEF={super:{nombre:'Supermercado',emoji:'🛒'},verduleria:{nombre:'Verdulería',emoji:'🥬'},carniceria:{nombre:'Carnicería',emoji:'🥩'}};
+function tkCatId(key){
+  const def=TK_CAT_DEF[key];
+  let c=S.categorias.find(x=>x.activa&&x.tipo==='gasto'&&tkNorm(x.nombre)===tkNorm(def.nombre));
+  if(!c){c={id:uid('cat'),nombre:def.nombre,emoji:def.emoji,tipo:'gasto',activa:1};S.categorias.push(c);touch('categorias',c)}
+  return c.id}
+function tkNum(s){s=String(s).replace(/[$\s]/g,'');
+  if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s))s=s.replace(/\./g,'').replace(',','.');
+  else if(/,\d{1,2}$/.test(s)&&!s.includes('.'))s=s.replace(',','.');
+  else s=s.replace(/,/g,'');
+  const n=parseFloat(s);return n>0?n:null}
+function tkSize(s){const m=String(s).match(/([\d.,]+)\s*(kg|kilos?|g|grs?|gramos?|l|lt|litros?|ml|cc|un|u|unid\w*)\.?\s*$/i);
+  if(!m)return null;const n=tkNum(m[1]);if(!n)return null;
+  let u=m[2].toLowerCase();
+  u=u.startsWith('k')?'kg':u.startsWith('g')?'g':(u==='l'||u.startsWith('lt')||u.startsWith('litro'))?'L':(u==='ml'||u==='cc')?'ml':'un';
+  return {tamano:n,unidad:u}}
+function parseTicket(text){
+  const items=[],bad=[];
+  String(text||'').split(/\n+/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
+    let l=line.replace(/^[-•*]\s*/,'').replace(/^\d+[.)]\s+/,'');
+    const parts=l.split(/;|\t/).map(x=>x.trim());
+    let name=null,price=null,sz=null,tag=null;
+    if(parts.filter(Boolean).length>=2){
+      name=parts[0];price=tkNum(parts[1]);
+      if(parts[2])sz=tkSize(parts[2]);
+      tag=parts[3]||(parts[2]&&!tkSize(parts[2])?parts[2]:null)}
+    else{const m=l.match(/^(.+?)[\s,]+\$?\s*([\d.,]+)\s*$/);if(m){name=m[1].trim();price=tkNum(m[2])}}
+    if(name&&!sz){const m2=name.match(/^(.+?)\s+([\d.,]+\s*(?:kg|g|l|lt|ml|cc|un|u))\.?$/i);
+      if(m2){const s2=tkSize(m2[2]);if(s2){name=m2[1].trim();sz=s2}}}
+    if(name&&price)items.push({producto:name.slice(0,90),precio:price,cat:tkCat(name,tag),...(sz||{})});
+    else bad.push(line)});
+  return {items,bad}}
+let TK={};
+function openTicketForm(){
+  const last=activePrecios().slice(-1)[0];
+  TK={super:last?.super||'',moneda:'ARS',fecha:todayStr(),texto:'',aPrecios:true,aGasto:true,categoria:'cat_super'};
+  drawTicketForm()}
+function drawTicketForm(){
+  const supers=[...new Set(activePrecios().map(p=>p.super))];
+  const {items,bad}=parseTicket(TK.texto);
+  const total=items.reduce((a,x)=>a+x.precio,0);
+  const cats=S.categorias.filter(c=>c.activa&&c.tipo==='gasto');
+  openSheet(`
+    <div class="grip"></div>
+    <h3>Cargar ticket <button class="x" onclick="closeSheet()" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M18 6 6 18M6 6l12 12"/></svg></button></h3>
+    <div class="card" style="padding:12px 14px;margin-bottom:14px;font-size:13.5px;color:var(--tx2);line-height:1.55">
+      📸 Sacale foto al ticket, pasásela a ChatGPT con el prompt de abajo, y pegá acá lo que te devuelva.
+      <button class="btn ghost" style="margin-top:10px;min-height:44px;padding:10px" onclick="copyPrompt(this)">📋 Copiar prompt para ChatGPT</button></div>
+    <div class="f2">
+      <div class="frow"><label>Comercio</label><input list="dl-supers2" placeholder="Coto, Día…" value="${esc(TK.super)}" oninput="TK.super=this.value">
+        <datalist id="dl-supers2">${supers.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+      <div class="frow"><label>Fecha</label><input type="date" value="${TK.fecha}" onchange="TK.fecha=this.value"></div></div>
+    <div class="frow"><label>Productos <span class="opt">(uno por línea: producto; precio; tamaño)</span></label>
+      <textarea id="tk-text" rows="6" placeholder="Leche entera; 1890; 1 L&#10;Café molido; 8900; 500 g&#10;Pan lactal; 2350" style="resize:vertical;min-height:120px;font-size:14px;line-height:1.5" oninput="TK.texto=this.value;updateTicketPreview()">${esc(TK.texto)}</textarea>
+      <div id="tk-preview" class="hint" style="min-height:20px">${ticketPreviewHtml(items,bad,total)}</div></div>
+    <div class="frow">
+      <div class="toggle-row" onclick="TK.aPrecios=!TK.aPrecios;drawTicketForm()">
+        <div><span class="tr-l">🏷️ Guardar en comparador</span><span class="tr-s">Suma estos precios a la tabla de ${esc(TK.super)||'ese comercio'}</span></div>
+        <span class="sw ${TK.aPrecios?'on':''}"></span></div></div>
+    <div class="frow">
+      <div class="toggle-row" onclick="TK.aGasto=!TK.aGasto;drawTicketForm()">
+        <div><span class="tr-l">💸 Registrar el gasto</span><span class="tr-s">Separado por categoría: 🛒 Súper · 🥬 Verdulería · 🥩 Carnicería</span></div>
+        <span class="sw ${TK.aGasto?'on':''}"></span></div>
+      <div class="frow" style="margin-top:10px;margin-bottom:0"><label>Moneda</label><select onchange="TK.moneda=this.value">${CURS.map(c=>`<option ${TK.moneda===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <button class="btn" onclick="saveTicket()">${ICON.check} Guardar todo</button>`);
+}
+function ticketPreviewHtml(items,bad,total){
+  if(!items.length&&!bad.length)return'';
+  let h=`<span class="g">✓ ${items.length} producto${items.length===1?'':'s'}</span> · total ${fmt(total)}`;
+  const sub={};items.forEach(x=>{sub[x.cat]=(sub[x.cat]||0)+x.precio});
+  const parts=['super','verduleria','carniceria'].filter(k=>sub[k])
+    .map(k=>TK_CAT_DEF[k].emoji+' '+fmt(sub[k]));
+  if(parts.length>1)h+='<br>'+parts.join(' · ');
+  if(bad.length)h+=`<br>⚠ sin entender (${bad.length}): ${bad.slice(0,3).map(esc).join(' · ')}${bad.length>3?'…':''}`;
+  return h}
+function updateTicketPreview(){const {items,bad}=parseTicket(TK.texto);
+  const el=$('#tk-preview');if(el)el.innerHTML=ticketPreviewHtml(items,bad,items.reduce((a,x)=>a+x.precio,0))}
+function copyPrompt(btn){
+  const done=()=>{btn.textContent='✓ Copiado — pegalo en ChatGPT junto a la foto';setTimeout(()=>{btn.textContent='📋 Copiar prompt para ChatGPT'},2500)};
+  if(navigator.clipboard?.writeText)navigator.clipboard.writeText(CHATGPT_PROMPT).then(done).catch(()=>fallbackCopy(done));
+  else fallbackCopy(done)}
+function fallbackCopy(done){const ta=document.createElement('textarea');ta.value=CHATGPT_PROMPT;
+  document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){toast('No pude copiar — decime y te paso el prompt')}
+  ta.remove()}
+function saveTicket(){
+  const {items}=parseTicket(TK.texto);
+  if(!TK.super.trim())return toast('Falta el comercio');
+  if(!items.length)return toast('No reconocí ningún producto 👀');
+  if(!TK.aPrecios&&!TK.aGasto)return toast('Elegí al menos un destino');
+  const sup=TK.super.trim();const total=items.reduce((a,x)=>a+x.precio,0);
+  if(TK.aPrecios)items.forEach(x=>{
+    const p={id:uid('pre'),fecha:TK.fecha,super:sup,producto:x.producto,precio:x.precio,moneda:TK.moneda,
+      tamano:x.tamano||'',unidad:x.unidad||'un'};
+    S.precios.push(p);touch('precios',p)});
+  let nMovs=0;
+  if(TK.aGasto){
+    const cta_=S.cuentas.find(c=>c.activa&&c.moneda===TK.moneda)||S.cuentas.find(c=>c.activa);
+    const groups={};items.forEach(x=>{(groups[x.cat]=groups[x.cat]||[]).push(x)});
+    for(const key of Object.keys(groups)){
+      const g=groups[key];const subtotal=g.reduce((a,x)=>a+x.precio,0);
+      const m={id:uid('mov'),tipo:'gasto',fecha:TK.fecha,cuenta:cta_.id,moneda:cta_.moneda,monto:subtotal,
+        categoria:tkCatId(key),descripcion:sup+' · '+g.length+' producto'+(g.length===1?'':'s'),medio_pago:'',creado_en:Date.now()+nMovs};
+      S.movs.push(m);touch('movs',m);nMovs++}}
+  closeSheet();nav('precios');
+  toast('✓ '+(TK.aPrecios?items.length+' precios':'')+(TK.aGasto?(TK.aPrecios?' + ':'')+nMovs+' gasto'+(nMovs===1?'':'s')+' ('+fmt(total)+' '+TK.moneda+')':'')+' guardados')}
 
 /* =====================================================
    LISTAS (pendientes / súper)
